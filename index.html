@@ -31,20 +31,42 @@
 
         <!-- ===== SIDE: LOGG INN ===== -->
         <section id="side-logginn" class="side">
-            <div class="kort smal">
+            <div class="velkomen">
                 <h1 class="logo stor">DigiBook</h1>
                 <p class="grå">Ein dagbok du deler med andre.</p>
-                <label>Brukarnamn <span class="grå">(berre når du lagar ny konto)</span>
-                    <input type="text" id="brukarnamn" maxlength="20">
-                </label>
+            </div>
+            <div class="kort smal">
+                <h2>Logg inn</h2>
                 <label>E-post
-                    <input type="email" id="epost">
+                    <input type="email" id="logginn-epost" autocomplete="email">
                 </label>
                 <label>Passord
-                    <input type="password" id="passord">
+                    <input type="password" id="logginn-passord" autocomplete="current-password">
                 </label>
                 <button id="knapp-logginn" class="heil">Logg inn</button>
-                <button id="knapp-lagkonto" class="kvit heil">Lag ny konto</button>
+                <p class="byt">Har du ikkje konto? <button id="til-registrer" class="lenke sterk">Lag ny konto</button></p>
+            </div>
+        </section>
+
+        <!-- ===== SIDE: LAG NY KONTO ===== -->
+        <section id="side-registrer" class="side" hidden>
+            <div class="velkomen">
+                <h1 class="logo stor">DigiBook</h1>
+                <p class="grå">Ein dagbok du deler med andre.</p>
+            </div>
+            <div class="kort smal">
+                <h2>Lag ny konto</h2>
+                <label>Brukarnamn
+                    <input type="text" id="reg-brukarnamn" maxlength="20" autocomplete="username">
+                </label>
+                <label>E-post
+                    <input type="email" id="reg-epost" autocomplete="email">
+                </label>
+                <label>Passord <span class="grå">(minst 6 teikn)</span>
+                    <input type="password" id="reg-passord" autocomplete="new-password">
+                </label>
+                <button id="knapp-lagkonto" class="heil">Lag konto</button>
+                <p class="byt">Har du allereie konto? <button id="til-logginn" class="lenke sterk">Logg inn</button></p>
             </div>
         </section>
 
@@ -107,7 +129,7 @@
             <div id="innlegg-stor"></div>
             <div class="svar-omrade">
                 <h2>Svar</h2>
-                <p class="grå liten-tekst">Hald inne på eit svar for å reagere med ein emoji.</p>
+                <p class="grå liten-tekst">Trykk «Reager» eller hald inne på eit svar for å svare med ein emoji.</p>
                 <div id="svar-liste"></div>
                 <div class="kort svar-skjema">
                     <textarea id="svar-tekst" rows="3" placeholder="Skriv eit svar ..."></textarea>
@@ -204,10 +226,13 @@
                 <button id="knapp-avbryt-pynt" class="kvit">Avbryt</button>
             </div>
 
-            <div class="side-topp">
-                <h2 id="profil-tekstar-tittel">Mine tekstar</h2>
+            <!-- Faner: tekstar personen har skrive, og tekstar personen har delt -->
+            <div class="faner">
+                <button id="fane-tekstar" class="fane aktiv">Tekstar</button>
+                <button id="fane-delt" class="fane">Delt</button>
             </div>
             <div id="profil-liste" class="rutenett"></div>
+            <div id="profil-delt-liste" class="rutenett" hidden></div>
         </section>
     </main>
 

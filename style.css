@@ -80,7 +80,14 @@ button.lenke:hover { color: var(--tekst); }
 .kort { background: var(--kvit); border: 1px solid var(--kant); border-radius: 12px; padding: 1.75rem; }
 .smal { max-width: 460px; margin: 2rem auto; }
 .middels { max-width: 720px; margin: 1rem auto; }
-.logo.stor { font-size: 2.4rem; margin: 0; }
+/* Logg inn / Lag konto */
+.velkomen { text-align: center; margin-top: 3rem; }
+.velkomen p { margin: 0.25rem 0 0; }
+.logo.stor { font-size: 2.8rem; margin: 0; }
+.velkomen + .smal { margin-top: 1.75rem; }
+.smal h2 { font-size: 1.4rem; margin-bottom: 1.25rem; }
+.byt { text-align: center; margin: 1.25rem 0 0; color: var(--grå); font-size: 0.9rem; }
+button.lenke.sterk { color: var(--brun); font-weight: 600; }
 
 label { display: block; font-weight: 500; font-size: 0.9rem; margin-bottom: 1rem; }
 .etikett { font-weight: 600; margin: 1.25rem 0 0.5rem; }
@@ -135,8 +142,6 @@ input:focus, textarea:focus { outline: none; border-color: var(--brun); box-shad
 .innlegg:hover { box-shadow: 0 6px 20px rgba(60, 40, 20, 0.07); }
 .innlegg.privat { background: #faf8f5; border-style: dashed; }
 
-.delt-linje { margin: 0 0 0.75rem; font-size: 0.85rem; color: var(--grå); }
-.delt-linje .lenke { font-size: 0.85rem; color: var(--tekst); }
 
 .innlegg-topp { display: flex; align-items: center; justify-content: space-between; }
 .humor { font-size: 1.3rem; }
@@ -191,6 +196,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--brun); box-shad
 .innlegg-botn span:last-child button { margin: 0 0 0 0.8rem; }
 .hjarte { background: none; border: none; padding: 0; color: var(--grå); font-weight: 500; }
 .hjarte.vald { color: var(--raud); }
+button.del-knapp.vald { color: var(--brun); font-weight: 600; }
 button.slett { color: var(--raud); }
 
 /* ===== PERSONAR I SØK ===== */
@@ -216,9 +222,18 @@ button.slett { color: var(--raud); }
 .svar-topp { display: flex; justify-content: space-between; align-items: center; }
 .svar p { margin: 0.6rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
-.reaksjonar { display: flex; gap: 0.4rem; margin-top: 0.5rem; }
-.reaksjonar:empty { display: none; }
-.reaksjon { background: var(--lysebrun); border-radius: 999px; padding: 0.05rem 0.55rem; font-size: 0.85rem; }
+.svar-reaksjonar { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin-top: 0.6rem; }
+.reaksjon {
+    background: var(--lysebrun);
+    border: 1px solid transparent;
+    color: var(--tekst);
+    border-radius: 999px;
+    padding: 0.05rem 0.55rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+.reaksjon.vald { border-color: var(--brun); }
+.reager-knapp { font-size: 0.85rem; margin-left: 0.3rem; }
 
 /* Emoji-menyen som kjem når du held inne */
 .reaksjonsmeny {
@@ -267,6 +282,20 @@ button.slett { color: var(--raud); }
 .profil-kort p { margin: 0.25rem 1.5rem; }
 .profil-knappar { display: flex; justify-content: center; gap: 0.5rem; margin-top: 1.25rem; }
 .profil-knappar:empty { display: none; }
+
+/* Fanene "Tekstar" og "Delt" */
+.faner { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--kant); margin-bottom: 1.5rem; }
+.fane {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    color: var(--grå);
+    padding: 0.6rem 1rem;
+    margin-bottom: -1px;
+}
+.fane:hover { color: var(--tekst); filter: none; }
+.fane.aktiv { color: var(--tekst); border-bottom-color: var(--brun); }
 
 .pynt { max-width: 680px; margin: -1.5rem auto 2.5rem; }
 .pynt .avatar { margin-bottom: 0.75rem; }

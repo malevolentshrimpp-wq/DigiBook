@@ -33,6 +33,7 @@ let minUid = null;          // ID-en til den som er logga inn
 let minProfil = null;       // profilen til den som er logga inn
 let nyttBrukarnamn = null;  // brukarnamnet når nokon lagar ny konto
 let profilar = {};          // alle profilane, så me kan vise namn og bilete
+let mineDelte = {};         // tekstar eg har delt: { tekst-ID: delings-ID }
 
 const FORSLAG = [
     "skule", "lekser", "prøvar", "venskap", "familie", "kjærleik", "forhold", "stress",
@@ -116,11 +117,6 @@ function dato(tid) {
     return new Date(tid).toLocaleString("nn-NO", { dateStyle: "medium", timeStyle: "short" });
 }
 
-// Hentar namnet til ein brukar
-function namnTil(uid) {
-    return profilar[uid] ? profilar[uid].brukarnamn : "Ukjend";
-}
-
 // Profilbilete: anten eit opplasta bilete, eller første bokstav i brukarnamnet
 function bileteHTML(profil) {
     if (profil.bilete && profil.bilete.startsWith("data:image/")) {
@@ -182,33 +178,46 @@ function leggTilEige(feltId, liste) {
 
 // ---------- 4. LOGG INN OG LAG KONTO ----------
 
+// Byte mellom "Logg inn" og "Lag ny konto"
+finn("til-registrer").onclick = () => visSide("side-registrer");
+finn("til-logginn").onclick = () => visSide("side-logginn");
+
+// Enter i passordfeltet = trykk på knappen
+finn("logginn-passord").onkeydown = (hending) => {
+    if (hending.key === "Enter") finn("knapp-logginn").click();
+};
+finn("reg-passord").onkeydown = (hending) => {
+    if (hending.key === "Enter") finn("knapp-lagkonto").click();
+};
+
 finn("knapp-logginn").onclick = async () => {
-    // Har kontoen ingen profil enno, brukar me brukarnamnet om det er skrive inn
-    nyttBrukarnamn = finn("brukarnamn").value.trim() || null;
+    nyttBrukarnamn = null;
     try {
-        await signInWithEmailAndPassword(auth, finn("epost").value, finn("passord").value);
+        await signInWithEmailAndPassword(auth, finn("logginn-epost").value, finn("logginn-passord").value);
     } catch (feil) {
         visMelding("Feil e-post eller passord.");
     }
 };
 
 finn("knapp-lagkonto").onclick = async () => {
-    const brukarnamn = finn("brukarnamn").value.trim();
+    const brukarnamn = finn("reg-brukarnamn").value.trim();
+    const epost = finn("reg-epost").value;
+    const passord = finn("reg-passord").value;
     if (brukarnamn.length < 3) {
         visMelding("Skriv eit brukarnamn på minst 3 bokstavar.");
         return;
     }
     try {
         nyttBrukarnamn = brukarnamn;
-        await createUserWithEmailAndPassword(auth, finn("epost").value, finn("passord").value);
+        await createUserWithEmailAndPassword(auth, epost, passord);
     } catch (feil) {
         if (feil.code === "auth/email-already-in-use") {
             // Kontoen finst frå før (t.d. om noko gjekk gale sist). Prøv å logge inn i staden.
             try {
-                await signInWithEmailAndPassword(auth, finn("epost").value, finn("passord").value);
+                await signInWithEmailAndPassword(auth, epost, passord);
             } catch {
                 nyttBrukarnamn = null;
-                visMelding("Denne e-posten har allereie ein konto. Skriv rett passord og trykk «Logg inn».");
+                visMelding("Denne e-posten har allereie ein konto. Gå til «Logg inn».");
             }
             return;
         }
@@ -229,6 +238,7 @@ onAuthStateChanged(auth, async (brukar) => {
     }
 
     minUid = brukar.uid;
+    mineDelte = {};
     const profilRef = doc(db, "brukarar", minUid);
     const svar = await getDoc(profilRef);
 
@@ -317,12 +327,23 @@ async function hentTekstar(sporjing) {
     const svar = await getDocs(sporjing);
     const liste = svar.docs.map((d) => ({ id: d.id, ...d.data() }));
     liste.sort((a, b) => b.dato - a.dato);
+
+    // Hugs kva tekstar eg har delt (så knappen viser "Delt ✓")
+    liste.forEach((i) => {
+        if (i.delt && i.uid === minUid) mineDelte[i.originalId] = i.id;
+    });
     return liste;
 }
 
 // Alle offentlege tekstar (ikkje private)
 function hentOffentlege() {
     return hentTekstar(query(collection(db, "innlegg"), where("privat", "==", false)));
+}
+
+// Offentlege tekstar utan delingar (delingar synest berre inne på profilen)
+async function hentOriginale() {
+    const alle = await hentOffentlege();
+    return alle.filter((i) => !i.delt);
 }
 
 // Alle mine tekstar, òg dei private
@@ -341,12 +362,6 @@ function innleggHTML(innlegg) {
     const tekst = innlegg.html ? rensHTML(innlegg.html) : vask(innlegg.tekst);
     const emne = innlegg.emne.map((e) => `<button class="emne lite">#${vask(e)}</button>`).join("");
 
-    // Delt av nokon andre? Då viser me det øvst.
-    let delt = "";
-    if (innlegg.delt) {
-        delt = `<p class="delt-linje">↻ <button class="lenke til-profil" data-uid="${vask(innlegg.uid)}">${vask(namnTil(innlegg.uid))}</button> delte dette</p>`;
-    }
-
     // Små merke: privat og redigert
     let merke = "";
     if (innlegg.privat) merke += `<span class="merke">🔒 Privat</span>`;
@@ -356,16 +371,17 @@ function innleggHTML(innlegg) {
     let venstre = `
         <button class="hjarte ${hjarte.includes(minUid) ? "vald" : ""}">♥ ${hjarte.length}</button>
         <button class="lenke svar-knapp">Svar</button>`;
-    if (!erMin) venstre += `<button class="lenke del-knapp">↻ Del</button>`;
+    if (!erMin) {
+        const harDelt = mineDelte[innlegg.id];
+        venstre += `<button class="lenke del-knapp ${harDelt ? "vald" : ""}" title="Del teksten på profilen din">${harDelt ? "↻ Delt ✓" : "↻ Del"}</button>`;
+    }
 
     // Knappar nedst til høgre: rediger/slett (mine) eller rapporter (andre sine)
     let hogre = `<button class="lenke rapporter">Rapporter</button>`;
-    if (erMin && innlegg.delt) hogre = `<button class="lenke slett">Fjern deling</button>`;
-    else if (erMin) hogre = `<button class="lenke rediger">Rediger</button> <button class="lenke slett">Slett</button>`;
+    if (erMin) hogre = `<button class="lenke rediger">Rediger</button> <button class="lenke slett">Slett</button>`;
 
     return `
         <article class="innlegg ${innlegg.privat ? "privat" : ""}">
-            ${delt}
             <div class="innlegg-topp">
                 ${forfattarHTML(innlegg.forfattarUid || innlegg.uid, innlegg.dato)}
                 <span class="humor">${vask(innlegg.humor || "")}</span>
@@ -428,24 +444,30 @@ async function gjeHjarte(innlegg, knapp) {
     knapp.classList.toggle("vald", innlegg.hjarte.includes(minUid));
 }
 
-// Del (republiser) ein annan sin tekst på din profil.
-// Me lagar ein kopi der "uid" er deg og "forfattarUid" er den som skreiv han.
+// Del (republiser) ein annan sin tekst på profilen din, eller angre delinga.
+// Ei deling er berre ein "peikar" til originalteksten (originalId), ikkje ein kopi.
 async function delInnlegg(innlegg, knapp) {
-    await addDoc(collection(db, "innlegg"), {
-        uid: minUid,
-        forfattarUid: innlegg.forfattarUid || innlegg.uid,
-        tittel: innlegg.tittel || "",
-        html: innlegg.html || vask(innlegg.tekst),
-        tekst: innlegg.tekst,
-        emne: innlegg.emne,
-        humor: innlegg.humor || "",
-        privat: false,
-        delt: true,
-        hjarte: [],
-        dato: Date.now()
-    });
-    knapp.textContent = "Delt ✓";
     knapp.disabled = true;
+
+    if (mineDelte[innlegg.id]) {
+        // Allereie delt: fjern delinga
+        await deleteDoc(doc(db, "innlegg", mineDelte[innlegg.id]));
+        delete mineDelte[innlegg.id];
+        knapp.textContent = "↻ Del";
+    } else {
+        // Del teksten
+        const deling = await addDoc(collection(db, "innlegg"), {
+            uid: minUid,
+            originalId: innlegg.id,
+            delt: true,
+            privat: false,
+            dato: Date.now()
+        });
+        mineDelte[innlegg.id] = deling.id;
+        knapp.textContent = "↻ Delt ✓";
+    }
+    knapp.classList.toggle("vald", Boolean(mineDelte[innlegg.id]));
+    knapp.disabled = false;
 }
 
 // Slett ein av dine eigne tekstar
@@ -531,7 +553,10 @@ async function visSvar() {
                 ${s.uid === minUid ? `<button class="lenke slett">Slett</button>` : ""}
             </div>
             <p>${vask(s.tekst)}</p>
-            <div class="reaksjonar">${reaksjonarHTML(s)}</div>
+            <div class="svar-reaksjonar">
+                ${reaksjonarHTML(s)}
+                <button class="lenke reager-knapp">☺ Reager</button>
+            </div>
         </div>`).join("");
 
     finn("svar-liste").querySelectorAll(".svar").forEach((boks, nr) => {
@@ -542,6 +567,8 @@ async function visSvar() {
             await deleteDoc(doc(db, "innlegg", opentInnlegg.id, "svar", s.id));
             visSvar();
         });
+        vedKlikk(boks, ".reager-knapp", () => visReaksjonsmeny(boks, s));
+        vedKlikk(boks, ".reaksjon", (knapp) => reager(s, knapp.dataset.emoji));   // trykk på ein emoji = same reaksjon
         koplHaldInne(boks, s);
     });
 }
@@ -566,13 +593,15 @@ finn("knapp-svar").onclick = async () => {
 
 // Tel kor mange som har gjeve kvar emoji, t.d. "❤️ 2  😂 1"
 function reaksjonarHTML(s) {
+    const reaksjonar = s.reaksjonar || {};
     const tal = {};
-    for (const emoji of Object.values(s.reaksjonar || {})) {
+    for (const emoji of Object.values(reaksjonar)) {
         tal[emoji] = (tal[emoji] || 0) + 1;
     }
-    return Object.entries(tal)
-        .map(([emoji, antal]) => `<span class="reaksjon">${vask(emoji)} ${antal}</span>`)
-        .join("");
+    return Object.entries(tal).map(([emoji, antal]) => {
+        const min = reaksjonar[minUid] === emoji ? "vald" : "";   // er det min reaksjon?
+        return `<button class="reaksjon ${min}" data-emoji="${vask(emoji)}">${vask(emoji)} ${antal}</button>`;
+    }).join("");
 }
 
 // Hald inne på eit svar i eit halvt sekund = vis emoji-menyen
@@ -626,7 +655,7 @@ async function reager(s, emoji) {
 
 async function visFeed() {
     visSide("side-feed");
-    const alle = await hentOffentlege();
+    const alle = await hentOriginale();
     const folgjer = minProfil.folgjer || [];
 
     // Dine eigne tekstar, tekstar frå folk du følgjer, og tekstar om noko du er interessert i
@@ -652,7 +681,7 @@ async function visFeed() {
 
 async function visAlle() {
     visSide("side-alle");
-    visInnlegg("alle-liste", await hentOffentlege(), "Ingen har skrive noko enno.");
+    visInnlegg("alle-liste", await hentOriginale(), "Ingen har skrive noko enno.");
 }
 
 
@@ -667,7 +696,7 @@ async function sok(ord) {
     ord = ord.replace("#", "").trim().toLowerCase();
     finn("sok-felt").value = ord;
     visSide("side-sok");
-    const alle = await hentOffentlege();   // hentar òg profilane
+    const alle = await hentOriginale();   // hentar òg profilane
 
     // Populære emne: tel kor mange tekstar som har kvart emne, og vis dei 15 største
     const tal = {};
@@ -718,7 +747,15 @@ async function visProfil(uid) {
     if (!erMeg) finn("meny-profil").classList.remove("aktiv");
 
     // Mine: alle tekstane mine, òg private. Andre: berre deira offentlege.
-    const tekstar = erMeg ? await hentMine() : (await hentOffentlege()).filter((i) => i.uid === uid);
+    const offentlege = await hentOffentlege();
+    const tekstar = erMeg ? await hentMine() : offentlege.filter((i) => i.uid === uid);
+    const eigne = tekstar.filter((i) => !i.delt);   // tekstar personen har skrive
+
+    // Delingar er berre peikarar. Finn originalteksten til kvar deling.
+    const delte = tekstar
+        .filter((i) => i.delt)
+        .map((deling) => offentlege.find((i) => i.id === deling.originalId))
+        .filter((original) => original);   // hopp over viss originalen er sletta
     const profil = profilar[uid];
 
     finn("profil-kort").className = "kort profil-kort farge-" + profil.farge;
@@ -739,9 +776,24 @@ async function visProfil(uid) {
     finn("knapp-folg").textContent = folgjerAllereie ? "Følgjer ✓" : "Følg";
     finn("knapp-folg").className = folgjerAllereie ? "kvit" : "";
 
-    finn("profil-tekstar-tittel").textContent = erMeg ? "Mine tekstar" : "Tekstar av " + profil.brukarnamn;
-    visInnlegg("profil-liste", tekstar, erMeg ? "Du har ikkje skrive noko enno." : "Ingen tekstar enno.");
+    // To faner: "Tekstar" og "Delt"
+    finn("fane-tekstar").textContent = `Tekstar (${eigne.length})`;
+    finn("fane-delt").textContent = `Delt (${delte.length})`;
+    visInnlegg("profil-liste", eigne, erMeg ? "Du har ikkje skrive noko enno." : "Ingen tekstar enno.");
+    visInnlegg("profil-delt-liste", delte,
+        erMeg ? "Du har ikkje delt noko enno. Trykk «↻ Del» på ein tekst du likar." : "Ingen delte tekstar enno.");
+    visFane("tekstar");
 }
+
+// Byt mellom fanene "Tekstar" og "Delt" på profilen
+function visFane(fane) {
+    finn("profil-liste").hidden = fane !== "tekstar";
+    finn("profil-delt-liste").hidden = fane !== "delt";
+    finn("fane-tekstar").classList.toggle("aktiv", fane === "tekstar");
+    finn("fane-delt").classList.toggle("aktiv", fane === "delt");
+}
+finn("fane-tekstar").onclick = () => visFane("tekstar");
+finn("fane-delt").onclick = () => visFane("delt");
 
 // Følg eller slutt å følgje
 finn("knapp-folg").onclick = async () => {
