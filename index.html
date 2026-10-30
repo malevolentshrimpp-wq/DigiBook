@@ -50,10 +50,14 @@
 
         <!-- ===== SIDE: VEL INTERESSER ===== -->
         <section id="side-interesser" class="side" hidden>
-            <div class="kort smal">
+            <div class="kort middels">
                 <h2>Kva er du interessert i?</h2>
-                <p class="grå">Vel det du likar, så viser me deg tekstar frå andre om dette.</p>
+                <p class="grå">Vel så mange du vil. Då viser me deg tekstar frå andre om dette.</p>
                 <div id="interesse-liste"></div>
+                <div class="rad">
+                    <input type="text" id="eiga-interesse" placeholder="Noko anna? Skriv det her" maxlength="20">
+                    <button id="knapp-legg-til-interesse" class="kvit">Legg til</button>
+                </div>
                 <button id="knapp-lagre-interesser" class="heil">Ferdig</button>
             </div>
         </section>
@@ -71,7 +75,7 @@
         <section id="side-alle" class="side" hidden>
             <div class="side-topp">
                 <h2>Alle tekstar</h2>
-                <p class="grå">Alt som er skrive på DigiBook, med det nyaste først.</p>
+                <p class="grå">Alt som er delt på DigiBook, med det nyaste først.</p>
             </div>
             <div id="alle-liste" class="rutenett"></div>
         </section>
@@ -81,10 +85,17 @@
             <div class="side-topp">
                 <h2>Søk</h2>
                 <div class="rad">
-                    <input type="text" id="sok-felt" placeholder="Søk etter eit emne eller eit ord, t.d. stress">
+                    <input type="text" id="sok-felt" placeholder="Søk etter personar, emne eller ord">
                     <button id="knapp-sok">Søk</button>
                 </div>
             </div>
+            <div id="sok-emne-boks">
+                <h3 class="undertittel">Populære emne</h3>
+                <div id="sok-emne"></div>
+            </div>
+            <h3 id="sok-personar-tittel" class="undertittel">Personar</h3>
+            <div id="sok-personar" class="personar"></div>
+            <h3 id="sok-tekstar-tittel" class="undertittel">Tekstar</h3>
             <div id="sok-liste" class="rutenett"></div>
         </section>
 
@@ -96,11 +107,11 @@
             <div id="innlegg-stor"></div>
             <div class="svar-omrade">
                 <h2>Svar</h2>
+                <p class="grå liten-tekst">Hald inne på eit svar for å reagere med ein emoji.</p>
                 <div id="svar-liste"></div>
                 <div class="kort svar-skjema">
                     <textarea id="svar-tekst" rows="3" placeholder="Skriv eit svar ..."></textarea>
                     <div class="svar-botn">
-                        <label class="avkryss"><input type="checkbox" id="svar-anonym"> Svar anonymt</label>
                         <button id="knapp-svar">Send svar</button>
                     </div>
                 </div>
@@ -112,13 +123,14 @@
             <div class="skriv-ramme">
                 <!-- Verktøylinja -->
                 <div class="verktoy">
-                    <button class="format" data-merke="**" title="Feit skrift"><b>B</b></button>
-                    <button class="format" data-merke="*" title="Kursiv"><i>I</i></button>
-                    <button class="format" data-merke="__" title="Understreka"><u>U</u></button>
+                    <button class="format" data-kommando="bold" title="Feit skrift"><b>B</b></button>
+                    <button class="format" data-kommando="italic" title="Kursiv"><i>I</i></button>
+                    <button class="format" data-kommando="underline" title="Understreka"><u>U</u></button>
+                    <button class="format" data-kommando="insertUnorderedList" title="Punktliste">• Liste</button>
                     <span class="skilje"></span>
                     <span class="grå">Humør</span>
                     <span id="humor-liste"></span>
-                    <label class="avkryss"><input type="checkbox" id="nytt-anonym"> Post anonymt</label>
+                    <label class="avkryss"><input type="checkbox" id="nytt-privat"> 🔒 Privat</label>
                 </div>
 
                 <!-- Det kvite arket -->
@@ -126,7 +138,7 @@
                     <div class="dokument">
                         <p id="skriv-dato"></p>
                         <input type="text" id="nytt-tittel" class="tittel-felt" placeholder="Tittel" maxlength="80">
-                        <textarea id="nytt-tekst" placeholder="Kjære dagbok ..."></textarea>
+                        <div id="nytt-tekst" class="skrivefelt" contenteditable="true" data-placeholder="Kjære dagbok ..."></div>
                     </div>
                 </div>
 
@@ -138,9 +150,8 @@
                         <input type="text" id="eige-emne" placeholder="Eige emne, t.d. hest" maxlength="20">
                         <button id="knapp-legg-til-emne" class="kvit">Legg til</button>
                     </div>
-                    <p id="anonym-info" class="anonym-info" hidden>
-                        <b>Du postar anonymt.</b> Andre ser ikkje namnet eller profilbiletet ditt.
-                        Viss teksten vert rapportert, kan admin likevel sjå kven som skreiv han.
+                    <p id="privat-info" class="privat-info" hidden>
+                        🔒 <b>Privat tekst.</b> Berre du kan sjå han. Han synest på profilen din, men ingen andre ser han.
                     </p>
                 </div>
 
@@ -161,11 +172,15 @@
                 <div class="banner"></div>
                 <div id="profil-bilete" class="avatar"></div>
                 <h2 id="profil-namn"></h2>
+                <p id="profil-tal" class="grå liten-tekst"></p>
                 <p id="profil-bio"></p>
                 <p id="profil-interesser" class="grå"></p>
                 <div id="profil-knappar" class="profil-knappar">
                     <button id="knapp-pynt" class="kvit">Rediger profil</button>
                     <button id="knapp-endre-interesser" class="kvit">Endre interesser</button>
+                </div>
+                <div class="profil-knappar">
+                    <button id="knapp-folg">Følg</button>
                 </div>
             </div>
 
@@ -195,6 +210,21 @@
             <div id="profil-liste" class="rutenett"></div>
         </section>
     </main>
+
+    <!-- ===== VINDAUGE: RAPPORTER ===== -->
+    <dialog id="rapport-dialog">
+        <h2>Rapporter tekst</h2>
+        <p class="grå">Kvifor vil du rapportere denne teksten?</p>
+        <label class="radio"><input type="radio" name="grunn" value="Mobbing eller trakassering" checked> Mobbing eller trakassering</label>
+        <label class="radio"><input type="radio" name="grunn" value="Stygt eller sårande språk"> Stygt eller sårande språk</label>
+        <label class="radio"><input type="radio" name="grunn" value="Spam"> Spam</label>
+        <label class="radio"><input type="radio" name="grunn" value="Anna"> Anna</label>
+        <textarea id="rapport-meir" rows="2" placeholder="Fortel meir (valfritt)"></textarea>
+        <div class="dialog-knappar">
+            <button id="rapport-avbryt" class="kvit">Avbryt</button>
+            <button id="rapport-send">Send rapport</button>
+        </div>
+    </dialog>
 
     <script type="module" src="script.js"></script>
 </body>

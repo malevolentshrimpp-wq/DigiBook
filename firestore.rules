@@ -2,40 +2,46 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Profilane til brukarane
+    // ===== BRUKARAR =====
     match /brukarar/{uid} {
       // Alle som er logga inn kan sjå profilar
       allow read: if request.auth != null;
-      // Du kan berre lage og endre din EIGEN profil
+      // Du kan berre endre din EIGEN profil (òg kven du følgjer)
       allow write: if request.auth != null && request.auth.uid == uid;
+
+      // E-posten ligg i ei privat mappe under brukaren. Berre du sjølv ser han.
+      match /privat/{dokument} {
+        allow read, write: if request.auth != null && request.auth.uid == uid;
+      }
     }
 
-    // E-postane. Berre du sjølv kan sjå din eigen.
-    match /privat/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
-    }
-
-    // Tekstane (innlegga)
+    // ===== TEKSTAR =====
     match /innlegg/{id} {
-      // Alle som er logga inn kan lese tekstar
-      allow read: if request.auth != null;
+      // Offentlege tekstar kan alle lese. Private tekstar berre eigaren.
+      allow read: if request.auth != null
+        && (resource.data.privat == false || resource.data.uid == request.auth.uid);
       // Du kan berre lage tekstar i ditt eige namn
       allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
-      // Andre kan berre endre hjarte-lista (gje hjarte), ikkje teksten
+      // Eigaren kan redigere. Andre kan berre gje hjarte.
       allow update: if request.auth != null
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hjarte']);
-      // Du kan berre slette dine eigne tekstar
+        && (resource.data.uid == request.auth.uid
+            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hjarte']));
+      // Berre eigaren kan slette
       allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
 
-      // Svar under ein tekst
+      // ===== SVAR UNDER EIN TEKST =====
       match /svar/{svarId} {
         allow read: if request.auth != null;
         allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+        // Andre kan berre leggje til emoji-reaksjonar
+        allow update: if request.auth != null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reaksjonar']);
         allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
       }
     }
 
-    // Rapportar. Alle kan sende, men ingen kan lese dei frå nettsida.
+    // ===== RAPPORTAR =====
+    // Alle kan sende, men ingen kan lese dei frå nettsida.
     // Berre du som admin ser dei inne i Firebase.
     match /rapportar/{id} {
       allow create: if request.auth != null && request.resource.data.rapportertAv == request.auth.uid;

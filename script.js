@@ -9,7 +9,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged }
     from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
-import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc, arrayUnion, arrayRemove }
+import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc,
+    query, where, arrayUnion, arrayRemove, deleteField }
     from "https://www.gstatic.com/firebasejs/13.1.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -26,17 +27,23 @@ const auth = getAuth(app);     // innlogging
 const db = getFirestore(app);  // databasen
 
 
-// ---------- 2. VARIABLAR ----------
+// ---------- 2. VARIABLAR OG LISTER ----------
 
 let minUid = null;          // ID-en til den som er logga inn
 let minProfil = null;       // profilen til den som er logga inn
 let nyttBrukarnamn = null;  // brukarnamnet når nokon lagar ny konto
 let profilar = {};          // alle profilane, så me kan vise namn og bilete
 
-const FORSLAG = ["skule", "venskap", "familie", "kjærleik", "stress", "søvn", "trening", "mat",
-    "musikk", "spel", "film", "bøker", "natur", "dyr", "mote", "kunst", "framtid", "jobb", "klager"];
+const FORSLAG = [
+    "skule", "lekser", "prøvar", "venskap", "familie", "kjærleik", "forhold", "stress",
+    "angst", "søvn", "helse", "kvardag", "klager", "framtid", "jobb", "pengar",
+    "trening", "fotball", "dans", "friluftsliv", "natur", "dyr", "hest", "mat",
+    "baking", "musikk", "konsertar", "spel", "film", "seriar", "bøker", "teikning",
+    "kunst", "foto", "mote", "sminke", "reise", "teknologi", "koding", "humor"
+];
 const FARGAR = ["kaffi", "rosa", "salvie", "lavendel", "himmel"];
 const HUMOR = ["😊", "🥰", "😢", "😡", "😰", "😴"];
+const REAKSJONAR = ["❤️", "😂", "😮", "😢", "👏", "🙏"];
 
 
 // ---------- 3. HJELPEFUNKSJONAR ----------
@@ -63,7 +70,13 @@ function visMelding(tekst) {
     window.scrollTo(0, 0);
 }
 
-// SIKKERHEIT: gjer om farlege teikn, så ingen kan leggje inn kode i tekstane sine (XSS)
+// Viser alle feil som skjer med databasen, så du ser kva som er gale
+window.addEventListener("unhandledrejection", (hending) => {
+    console.error(hending.reason);
+    visMelding("Noko gjekk gale: " + hending.reason.message);
+});
+
+// SIKKERHEIT: gjer om farlege teikn, så ingen kan leggje inn kode (XSS)
 function vask(tekst) {
     return String(tekst)
         .replaceAll("&", "&amp;")
@@ -73,18 +86,39 @@ function vask(tekst) {
         .replaceAll("'", "&#39;");
 }
 
-// Gjer **feit**, *kursiv* og __understreka__ tekst om til HTML.
-// Teksten vert vaska FØRST, så dette er trygt.
-function formatertTekst(tekst) {
-    return vask(tekst)
-        .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
-        .replace(/__(.+?)__/g, "<u>$1</u>")
-        .replace(/\*(.+?)\*/g, "<i>$1</i>");
+// SIKKERHEIT: tekstane kan ha feit, kursiv osv. Me går gjennom HTML-en og
+// tek berre vare på trygge taggar (ei "kvitliste"). Alt anna vert fjerna.
+const TRYGGE_TAGGAR = ["B", "STRONG", "I", "EM", "U", "BR", "DIV", "P", "UL", "OL", "LI"];
+
+function rensHTML(html) {
+    const mal = document.createElement("template");   // template køyrer aldri skript
+    mal.innerHTML = html;
+
+    function rens(node) {
+        let resultat = "";
+        for (const barn of node.childNodes) {
+            if (barn.nodeType === Node.TEXT_NODE) {
+                resultat += vask(barn.textContent);
+            } else if (TRYGGE_TAGGAR.includes(barn.nodeName)) {
+                const tag = barn.nodeName.toLowerCase();
+                resultat += tag === "br" ? "<br>" : `<${tag}>${rens(barn)}</${tag}>`;
+            } else {
+                resultat += rens(barn);   // ukjend tagg: behald berre teksten inni
+            }
+        }
+        return resultat;
+    }
+    return rens(mal.content);
 }
 
 // Gjer om eit tidspunkt til lesbar dato, t.d. "30. okt. 2026, 11:43"
 function dato(tid) {
     return new Date(tid).toLocaleString("nn-NO", { dateStyle: "medium", timeStyle: "short" });
+}
+
+// Hentar namnet til ein brukar
+function namnTil(uid) {
+    return profilar[uid] ? profilar[uid].brukarnamn : "Ukjend";
 }
 
 // Profilbilete: anten eit opplasta bilete, eller første bokstav i brukarnamnet
@@ -95,23 +129,24 @@ function bileteHTML(profil) {
     return vask(profil.brukarnamn.charAt(0).toUpperCase());
 }
 
-// Namn + profilbilete + dato øvst på ein tekst eller eit svar.
-// Vanlege: kan trykkjast på for å sjå profilen. Anonyme: "?" og kan ikkje trykkjast på.
-function forfattarHTML(data) {
-    if (data.anonym) {
-        const namn = data.uid === minUid ? "Anonym (deg)" : "Anonym";
-        return `
-            <div class="forfattar">
-                <span class="avatar liten">?</span>
-                <span><b>${namn}</b><small>${dato(data.dato)}</small></span>
-            </div>`;
-    }
-    const profil = profilar[data.uid] || { brukarnamn: data.brukarnamn };
+// Namn + profilbilete + dato. Kan trykkjast på for å sjå profilen.
+function forfattarHTML(uid, tid) {
+    const profil = profilar[uid] || { brukarnamn: "Ukjend" };
     return `
-        <button class="forfattar til-profil">
+        <button class="forfattar til-profil" data-uid="${vask(uid)}">
             <span class="avatar liten">${bileteHTML(profil)}</span>
-            <span><b>${vask(profil.brukarnamn)}</b><small>${dato(data.dato)}</small></span>
+            <span><b>${vask(profil.brukarnamn)}</b><small>${dato(tid)}</small></span>
         </button>`;
+}
+
+// Finn ein knapp inni eit element og bestem kva som skjer når du trykkjer
+function vedKlikk(element, klasse, handling) {
+    element.querySelectorAll(klasse).forEach((knapp) => {
+        knapp.onclick = (hending) => {
+            hending.stopPropagation();
+            handling(knapp);
+        };
+    });
 }
 
 // Lagar knappar som kan slåast av og på (brukt til interesser og emne).
@@ -135,16 +170,21 @@ function lagValKnappar(boksId, alternativ, valde) {
     }
 }
 
-// Viser alle feil som skjer med databasen, så du ser kva som er gale
-window.addEventListener("unhandledrejection", (hending) => {
-    console.error(hending.reason);
-    visMelding("Noko gjekk gale: " + hending.reason.message);
-});
+// Les eit ord frå eit tekstfelt og legg det til i lista (t.d. eit eige emne)
+function leggTilEige(feltId, liste) {
+    const ord = finn(feltId).value.toLowerCase().replace(/[^a-zæøå0-9_]/g, "");
+    if (ord !== "" && !liste.includes(ord)) {
+        liste.push(ord);
+    }
+    finn(feltId).value = "";
+}
 
 
 // ---------- 4. LOGG INN OG LAG KONTO ----------
 
 finn("knapp-logginn").onclick = async () => {
+    // Har kontoen ingen profil enno, brukar me brukarnamnet om det er skrive inn
+    nyttBrukarnamn = finn("brukarnamn").value.trim() || null;
     try {
         await signInWithEmailAndPassword(auth, finn("epost").value, finn("passord").value);
     } catch (feil) {
@@ -162,9 +202,18 @@ finn("knapp-lagkonto").onclick = async () => {
         nyttBrukarnamn = brukarnamn;
         await createUserWithEmailAndPassword(auth, finn("epost").value, finn("passord").value);
     } catch (feil) {
+        if (feil.code === "auth/email-already-in-use") {
+            // Kontoen finst frå før (t.d. om noko gjekk gale sist). Prøv å logge inn i staden.
+            try {
+                await signInWithEmailAndPassword(auth, finn("epost").value, finn("passord").value);
+            } catch {
+                nyttBrukarnamn = null;
+                visMelding("Denne e-posten har allereie ein konto. Skriv rett passord og trykk «Logg inn».");
+            }
+            return;
+        }
         nyttBrukarnamn = null;
-        if (feil.code === "auth/email-already-in-use") visMelding("Denne e-posten har allereie ein konto.");
-        else if (feil.code === "auth/weak-password") visMelding("Passordet må ha minst 6 teikn.");
+        if (feil.code === "auth/weak-password") visMelding("Passordet må ha minst 6 teikn.");
         else visMelding("Sjekk at e-posten er rett skriven.");
     }
 };
@@ -180,27 +229,27 @@ onAuthStateChanged(auth, async (brukar) => {
     }
 
     minUid = brukar.uid;
-
-    // PERSONVERN: e-posten vert lagra i ei PRIVAT samling.
-    // Berre du sjølv (og admin i Firebase) kan sjå han, ikkje andre brukarar.
-    await setDoc(doc(db, "privat", minUid), { epost: brukar.email });
-
     const profilRef = doc(db, "brukarar", minUid);
     const svar = await getDoc(profilRef);
 
     if (svar.exists()) {
         minProfil = svar.data();
     } else {
-        // Ny brukar: lag ein profil (utan e-post, for andre kan lese profilen)
+        // Ny brukar: lag ein profil
         minProfil = {
             brukarnamn: nyttBrukarnamn || "brukar" + Math.floor(Math.random() * 1000),
-            interesser: [],
             bio: "",
             bilete: "",
-            farge: "kaffi"
+            farge: "kaffi",
+            interesser: [],
+            folgjer: []
         };
         await setDoc(profilRef, minProfil);
     }
+
+    // PERSONVERN: e-posten ligg i ei PRIVAT mappe under brukaren (brukarar/ID/privat/info).
+    // Berre du sjølv og admin kan sjå han, ikkje andre brukarar.
+    await setDoc(doc(db, "brukarar", minUid, "privat", "info"), { epost: brukar.email });
 
     finn("meny").hidden = false;
     if (minProfil.interesser.length === 0) {
@@ -215,9 +264,9 @@ onAuthStateChanged(auth, async (brukar) => {
 
 finn("meny-feed").onclick = () => visFeed();
 finn("meny-alle").onclick = () => visAlle();
-finn("meny-sok").onclick = () => visSide("side-sok");
+finn("meny-sok").onclick = () => sok("");
 finn("meny-profil").onclick = () => visProfil(minUid);
-finn("meny-skriv").onclick = () => opneSkriv();
+finn("meny-skriv").onclick = () => opneSkriv(null);
 
 
 // ---------- 6. INTERESSER ----------
@@ -226,9 +275,19 @@ let valde = [];  // interessene brukaren har trykt på
 
 function visInteresser() {
     valde = [...minProfil.interesser];
-    lagValKnappar("interesse-liste", FORSLAG, valde);
+    teiknInteresser();
     visSide("side-interesser");
 }
+
+function teiknInteresser() {
+    const alternativ = [...new Set([...FORSLAG, ...valde])];   // forslag + eigne
+    lagValKnappar("interesse-liste", alternativ, valde);
+}
+
+finn("knapp-legg-til-interesse").onclick = () => {
+    leggTilEige("eiga-interesse", valde);
+    teiknInteresser();
+};
 
 finn("knapp-lagre-interesser").onclick = async () => {
     if (valde.length === 0) {
@@ -243,58 +302,92 @@ finn("knapp-lagre-interesser").onclick = async () => {
 finn("knapp-endre-interesser").onclick = () => visInteresser();
 
 
-// ---------- 7. TEKSTAR (INNLEGG) ----------
+// ---------- 7. HENTE TEKSTAR FRÅ DATABASEN ----------
 
-// Hentar alle tekstar (og alle profilar) frå databasen, med dei nyaste først
-async function hentAlleInnlegg() {
-    const brukarSvar = await getDocs(collection(db, "brukarar"));
-    brukarSvar.docs.forEach((d) => profilar[d.id] = d.data());
+// Hentar alle profilane
+async function hentProfilar() {
+    const svar = await getDocs(collection(db, "brukarar"));
+    svar.docs.forEach((d) => profilar[d.id] = d.data());
+    minProfil = profilar[minUid];
+}
 
-    const svar = await getDocs(collection(db, "innlegg"));
+// Hentar tekstar (og profilar), med dei nyaste først
+async function hentTekstar(sporjing) {
+    await hentProfilar();
+    const svar = await getDocs(sporjing);
     const liste = svar.docs.map((d) => ({ id: d.id, ...d.data() }));
     liste.sort((a, b) => b.dato - a.dato);
     return liste;
 }
 
+// Alle offentlege tekstar (ikkje private)
+function hentOffentlege() {
+    return hentTekstar(query(collection(db, "innlegg"), where("privat", "==", false)));
+}
+
+// Alle mine tekstar, òg dei private
+function hentMine() {
+    return hentTekstar(query(collection(db, "innlegg"), where("uid", "==", minUid)));
+}
+
+
+// ---------- 8. VISE TEKSTAR ----------
+
 // Lagar HTML for éin tekst
 function innleggHTML(innlegg) {
-    const tittel = innlegg.tittel ? `<h3>${vask(innlegg.tittel)}</h3>` : "";
-    const emne = innlegg.emne.map((e) => `<button class="emne lite">#${vask(e)}</button>`).join("");
+    const erMin = innlegg.uid === minUid;
     const hjarte = innlegg.hjarte || [];
-    const harTrykt = hjarte.includes(minUid) ? "vald" : "";
+    const tittel = innlegg.tittel ? `<h3>${vask(innlegg.tittel)}</h3>` : "";
+    const tekst = innlegg.html ? rensHTML(innlegg.html) : vask(innlegg.tekst);
+    const emne = innlegg.emne.map((e) => `<button class="emne lite">#${vask(e)}</button>`).join("");
 
-    // Mine eigne tekstar kan eg slette. Andre sine kan eg rapportere.
-    let knapp = `<button class="lenke rapporter">Rapporter</button>`;
-    if (innlegg.uid === minUid) {
-        knapp = `<button class="lenke slett">Slett</button>`;
+    // Delt av nokon andre? Då viser me det øvst.
+    let delt = "";
+    if (innlegg.delt) {
+        delt = `<p class="delt-linje">↻ <button class="lenke til-profil" data-uid="${vask(innlegg.uid)}">${vask(namnTil(innlegg.uid))}</button> delte dette</p>`;
     }
 
+    // Små merke: privat og redigert
+    let merke = "";
+    if (innlegg.privat) merke += `<span class="merke">🔒 Privat</span>`;
+    if (innlegg.redigert) merke += `<span class="grå liten-tekst">Redigert</span>`;
+
+    // Knappar nedst til venstre: hjarte, svar og del
+    let venstre = `
+        <button class="hjarte ${hjarte.includes(minUid) ? "vald" : ""}">♥ ${hjarte.length}</button>
+        <button class="lenke svar-knapp">Svar</button>`;
+    if (!erMin) venstre += `<button class="lenke del-knapp">↻ Del</button>`;
+
+    // Knappar nedst til høgre: rediger/slett (mine) eller rapporter (andre sine)
+    let hogre = `<button class="lenke rapporter">Rapporter</button>`;
+    if (erMin && innlegg.delt) hogre = `<button class="lenke slett">Fjern deling</button>`;
+    else if (erMin) hogre = `<button class="lenke rediger">Rediger</button> <button class="lenke slett">Slett</button>`;
+
     return `
-        <article class="innlegg ${innlegg.anonym ? "anonym" : ""}">
+        <article class="innlegg ${innlegg.privat ? "privat" : ""}">
+            ${delt}
             <div class="innlegg-topp">
-                ${forfattarHTML(innlegg)}
+                ${forfattarHTML(innlegg.forfattarUid || innlegg.uid, innlegg.dato)}
                 <span class="humor">${vask(innlegg.humor || "")}</span>
             </div>
             <div class="innhald">
                 ${tittel}
-                <p>${formatertTekst(innlegg.tekst)}</p>
+                <div class="tekst">${tekst}</div>
             </div>
+            <div class="merke-rad">${merke}</div>
             <div>${emne}</div>
             <div class="innlegg-botn">
-                <span>
-                    <button class="hjarte ${harTrykt}">♥ ${hjarte.length}</button>
-                    <button class="lenke svar-knapp">Svar</button>
-                </span>
-                ${knapp}
+                <span>${venstre}</span>
+                <span>${hogre}</span>
             </div>
         </article>`;
 }
 
 // Viser ei liste med tekstar på sida
-function visInnlegg(boksId, liste) {
+function visInnlegg(boksId, liste, tomTekst) {
     const boks = finn(boksId);
     if (liste.length === 0) {
-        boks.innerHTML = `<p class="grå">Ingen tekstar her enno.</p>`;
+        boks.innerHTML = `<p class="grå">${tomTekst}</p>`;
         return;
     }
     boks.innerHTML = liste.map(innleggHTML).join("");
@@ -303,29 +396,21 @@ function visInnlegg(boksId, liste) {
     boks.querySelectorAll(".innlegg").forEach((kort, nr) => koplKnappar(kort, liste[nr]));
 }
 
-// Gjer alle knappane i éin tekst klikkbare
+// Bestem kva alle knappane i éin tekst gjer
 function koplKnappar(kort, innlegg) {
-    kort.querySelectorAll(".emne").forEach((knapp) => {
-        knapp.onclick = () => sok(knapp.textContent);
-    });
-
-    // Trykk på teksten eller "Svar" = opne teksten
     kort.querySelector(".innhald").onclick = () => opneInnlegg(innlegg);
-    kort.querySelector(".svar-knapp").onclick = () => opneInnlegg(innlegg);
-
-    // Trykk på namnet = sjå profilen (finst ikkje på anonyme tekstar)
-    const profilKnapp = kort.querySelector(".til-profil");
-    if (profilKnapp) profilKnapp.onclick = () => visProfil(innlegg.uid);
-
-    const hjarteKnapp = kort.querySelector(".hjarte");
-    hjarteKnapp.onclick = () => gjeHjarte(innlegg, hjarteKnapp);
-
-    const slettKnapp = kort.querySelector(".slett");
-    if (slettKnapp) slettKnapp.onclick = () => slettInnlegg(innlegg, kort);
-
-    const rapportKnapp = kort.querySelector(".rapporter");
-    if (rapportKnapp) rapportKnapp.onclick = () => rapporter(innlegg, rapportKnapp);
+    vedKlikk(kort, ".svar-knapp", () => opneInnlegg(innlegg));
+    vedKlikk(kort, ".emne", (knapp) => sok(knapp.textContent));
+    vedKlikk(kort, ".til-profil", (knapp) => visProfil(knapp.dataset.uid));
+    vedKlikk(kort, ".hjarte", (knapp) => gjeHjarte(innlegg, knapp));
+    vedKlikk(kort, ".del-knapp", (knapp) => delInnlegg(innlegg, knapp));
+    vedKlikk(kort, ".rediger", () => opneSkriv(innlegg));
+    vedKlikk(kort, ".slett", () => slettInnlegg(innlegg, kort));
+    vedKlikk(kort, ".rapporter", (knapp) => rapporter(innlegg, knapp));
 }
+
+
+// ---------- 9. HJARTE, DELE, SLETTE OG RAPPORTERE ----------
 
 // Gje hjarte, eller ta det bort igjen viss du allereie har gjeve
 async function gjeHjarte(innlegg, knapp) {
@@ -343,35 +428,68 @@ async function gjeHjarte(innlegg, knapp) {
     knapp.classList.toggle("vald", innlegg.hjarte.includes(minUid));
 }
 
+// Del (republiser) ein annan sin tekst på din profil.
+// Me lagar ein kopi der "uid" er deg og "forfattarUid" er den som skreiv han.
+async function delInnlegg(innlegg, knapp) {
+    await addDoc(collection(db, "innlegg"), {
+        uid: minUid,
+        forfattarUid: innlegg.forfattarUid || innlegg.uid,
+        tittel: innlegg.tittel || "",
+        html: innlegg.html || vask(innlegg.tekst),
+        tekst: innlegg.tekst,
+        emne: innlegg.emne,
+        humor: innlegg.humor || "",
+        privat: false,
+        delt: true,
+        hjarte: [],
+        dato: Date.now()
+    });
+    knapp.textContent = "Delt ✓";
+    knapp.disabled = true;
+}
+
 // Slett ein av dine eigne tekstar
 async function slettInnlegg(innlegg, kort) {
-    if (!confirm("Vil du slette teksten?")) return;
+    if (!confirm("Vil du slette denne teksten?")) return;
     await deleteDoc(doc(db, "innlegg", innlegg.id));
     kort.remove();
     if (kort.classList.contains("stor")) visProfil(minUid);   // var teksten open, gå til profilen
 }
 
-// Rapporter ein tekst. Rapporten havnar i samlinga "rapportar" i Firebase.
-// Der ser admin kven som skreiv han (forfattarUid), òg om han er anonym.
-async function rapporter(innlegg, knapp) {
-    const grunn = prompt("Kvifor vil du rapportere denne teksten?");
-    if (!grunn) return;
+// Rapporter: opnar eit lite vindauge der du vel kvifor
+let rapportInnlegg = null;
+let rapportKnapp = null;
+
+function rapporter(innlegg, knapp) {
+    rapportInnlegg = innlegg;
+    rapportKnapp = knapp;
+    finn("rapport-meir").value = "";
+    finn("rapport-dialog").showModal();
+}
+
+finn("rapport-avbryt").onclick = () => finn("rapport-dialog").close();
+
+// Rapporten havnar i samlinga "rapportar" i Firebase, der admin kan lese han
+finn("rapport-send").onclick = async () => {
+    const grunn = document.querySelector('input[name="grunn"]:checked').value;
+    finn("rapport-dialog").close();
 
     await addDoc(collection(db, "rapportar"), {
-        innleggId: innlegg.id,
-        tekst: innlegg.tekst,
+        innleggId: rapportInnlegg.id,
+        tittel: rapportInnlegg.tittel || "",
+        tekst: rapportInnlegg.tekst,
         grunn: grunn,
-        forfattarUid: innlegg.uid,
-        anonym: innlegg.anonym,
+        meir: finn("rapport-meir").value.trim(),
+        forfattarUid: rapportInnlegg.forfattarUid || rapportInnlegg.uid,
         rapportertAv: minUid,
         dato: Date.now()
     });
-    knapp.textContent = "Rapportert ✓";
-    knapp.disabled = true;
-}
+    rapportKnapp.textContent = "Rapportert ✓";
+    rapportKnapp.disabled = true;
+};
 
 
-// ---------- 8. OPNE EIN TEKST OG SVARE ----------
+// ---------- 10. OPNE EIN TEKST OG SVARE ----------
 
 let opentInnlegg = null;        // teksten som er open no
 let forrigeSide = "side-feed";  // sida me kom frå (for "Tilbake"-knappen)
@@ -390,7 +508,6 @@ async function opneInnlegg(innlegg) {
     koplKnappar(kort, innlegg);
 
     finn("svar-tekst").value = "";
-    finn("svar-anonym").checked = false;
     visSvar();
 }
 
@@ -408,26 +525,24 @@ async function visSvar() {
     }
 
     finn("svar-liste").innerHTML = liste.map((s) => `
-        <div class="svar ${s.anonym ? "anonym" : ""}">
+        <div class="svar">
             <div class="svar-topp">
-                ${forfattarHTML(s)}
+                ${forfattarHTML(s.uid, s.dato)}
                 ${s.uid === minUid ? `<button class="lenke slett">Slett</button>` : ""}
             </div>
             <p>${vask(s.tekst)}</p>
+            <div class="reaksjonar">${reaksjonarHTML(s)}</div>
         </div>`).join("");
 
-    // Gjer namn og slett-knappar klikkbare
     finn("svar-liste").querySelectorAll(".svar").forEach((boks, nr) => {
         const s = liste[nr];
-        const profilKnapp = boks.querySelector(".til-profil");
-        if (profilKnapp) profilKnapp.onclick = () => visProfil(s.uid);
-
-        const slettKnapp = boks.querySelector(".slett");
-        if (slettKnapp) slettKnapp.onclick = async () => {
+        vedKlikk(boks, ".til-profil", (knapp) => visProfil(knapp.dataset.uid));
+        vedKlikk(boks, ".slett", async () => {
             if (!confirm("Vil du slette svaret?")) return;
             await deleteDoc(doc(db, "innlegg", opentInnlegg.id, "svar", s.id));
             visSvar();
-        };
+        });
+        koplHaldInne(boks, s);
     });
 }
 
@@ -435,77 +550,176 @@ async function visSvar() {
 finn("knapp-svar").onclick = async () => {
     const tekst = finn("svar-tekst").value.trim();
     if (tekst === "") return;
-    const anonym = finn("svar-anonym").checked;
 
     await addDoc(collection(db, "innlegg", opentInnlegg.id, "svar"), {
         uid: minUid,
-        brukarnamn: anonym ? "" : minProfil.brukarnamn,
-        anonym: anonym,
         tekst: tekst,
+        reaksjonar: {},
         dato: Date.now()
     });
     finn("svar-tekst").value = "";
-    finn("svar-anonym").checked = false;
     visSvar();
 };
 
 
-// ---------- 9. TIL DEG ----------
+// ---------- 11. EMOJI-REAKSJONAR PÅ SVAR (hald inne) ----------
+
+// Tel kor mange som har gjeve kvar emoji, t.d. "❤️ 2  😂 1"
+function reaksjonarHTML(s) {
+    const tal = {};
+    for (const emoji of Object.values(s.reaksjonar || {})) {
+        tal[emoji] = (tal[emoji] || 0) + 1;
+    }
+    return Object.entries(tal)
+        .map(([emoji, antal]) => `<span class="reaksjon">${vask(emoji)} ${antal}</span>`)
+        .join("");
+}
+
+// Hald inne på eit svar i eit halvt sekund = vis emoji-menyen
+function koplHaldInne(boks, s) {
+    let tidtakar = null;
+    boks.onpointerdown = (hending) => {
+        if (hending.target.closest("button")) return;   // ikkje når du trykkjer på ein knapp
+        tidtakar = setTimeout(() => visReaksjonsmeny(boks, s), 500);
+    };
+    boks.onpointerup = () => clearTimeout(tidtakar);
+    boks.onpointerleave = () => clearTimeout(tidtakar);
+    boks.oncontextmenu = (hending) => hending.preventDefault();   // ingen høgreklikk-meny
+}
+
+function visReaksjonsmeny(boks, s) {
+    document.querySelectorAll(".reaksjonsmeny").forEach((m) => m.remove());
+
+    const meny = document.createElement("div");
+    meny.className = "reaksjonsmeny";
+    for (const emoji of REAKSJONAR) {
+        const knapp = document.createElement("button");
+        knapp.textContent = emoji;
+        knapp.onclick = () => reager(s, emoji);
+        meny.append(knapp);
+    }
+    boks.append(meny);
+}
+
+// Trykk utanfor menyen = lukk han
+document.addEventListener("pointerdown", (hending) => {
+    if (!hending.target.closest(".reaksjonsmeny")) {
+        document.querySelectorAll(".reaksjonsmeny").forEach((m) => m.remove());
+    }
+});
+
+// Lagre reaksjonen. Same emoji ein gong til = fjern reaksjonen.
+async function reager(s, emoji) {
+    const ref = doc(db, "innlegg", opentInnlegg.id, "svar", s.id);
+    const felt = "reaksjonar." + minUid;   // t.d. reaksjonar.abc123 = "❤️"
+
+    if (s.reaksjonar && s.reaksjonar[minUid] === emoji) {
+        await updateDoc(ref, { [felt]: deleteField() });
+    } else {
+        await updateDoc(ref, { [felt]: emoji });
+    }
+    visSvar();
+}
+
+
+// ---------- 12. TIL DEG ----------
 
 async function visFeed() {
     visSide("side-feed");
-    const alle = await hentAlleInnlegg();
-    const fraAndre = alle.filter((i) => i.uid !== minUid);
+    const alle = await hentOffentlege();
+    const folgjer = minProfil.folgjer || [];
 
-    // Finn tekstar som har minst eitt emne brukaren likar
-    const forDeg = fraAndre.filter((i) => i.emne.some((e) => minProfil.interesser.includes(e)));
+    // Dine eigne tekstar, tekstar frå folk du følgjer, og tekstar om noko du er interessert i
+    const forDeg = alle.filter((i) =>
+        i.uid === minUid ||
+        folgjer.includes(i.uid) ||
+        i.emne.some((e) => minProfil.interesser.includes(e)));
 
     if (forDeg.length > 0) {
-        finn("feed-tekst").textContent = "Tekstar frå andre om ting du likar.";
-        visInnlegg("feed-liste", forDeg);
-    } else {
+        finn("feed-tekst").textContent = "Tekstar om ting du likar, frå folk du følgjer, og dine eigne.";
+        visInnlegg("feed-liste", forDeg, "");
+    } else if (alle.length > 0) {
         finn("feed-tekst").textContent = "Ingen har skrive om interessene dine enno. Her er dei nyaste tekstane.";
-        visInnlegg("feed-liste", fraAndre);
+        visInnlegg("feed-liste", alle, "");
+    } else {
+        finn("feed-tekst").textContent = "";
+        visInnlegg("feed-liste", [], "Ingen andre har skrive noko enno. Når nokon skriv om det du likar, dukkar det opp her.");
     }
 }
 
 
-// ---------- 10. ALLE TEKSTAR ----------
+// ---------- 13. ALLE TEKSTAR ----------
 
 async function visAlle() {
     visSide("side-alle");
-    visInnlegg("alle-liste", await hentAlleInnlegg());
+    visInnlegg("alle-liste", await hentOffentlege(), "Ingen har skrive noko enno.");
 }
 
 
-// ---------- 11. SØK ----------
+// ---------- 14. SØK (personar og tekstar) ----------
 
 finn("knapp-sok").onclick = () => sok(finn("sok-felt").value);
+finn("sok-felt").onkeydown = (hending) => {
+    if (hending.key === "Enter") sok(finn("sok-felt").value);
+};
 
 async function sok(ord) {
     ord = ord.replace("#", "").trim().toLowerCase();
     finn("sok-felt").value = ord;
     visSide("side-sok");
-    const alle = await hentAlleInnlegg();
-    // Treff viss ordet finst som #emne, i tittelen eller i teksten
+    const alle = await hentOffentlege();   // hentar òg profilane
+
+    // Populære emne: tel kor mange tekstar som har kvart emne, og vis dei 15 største
+    const tal = {};
+    alle.forEach((i) => i.emne.forEach((e) => tal[e] = (tal[e] || 0) + 1));
+    const populaere = Object.entries(tal).sort((a, b) => b[1] - a[1]).slice(0, 15);
+
+    finn("sok-emne").innerHTML = populaere.map(([emne, antal]) =>
+        `<button class="emne" data-emne="${vask(emne)}">#${vask(emne)} <span class="antal">${antal}</span></button>`).join("");
+    vedKlikk(finn("sok-emne"), ".emne", (knapp) => sok(knapp.dataset.emne));
+    finn("sok-emne-boks").hidden = ord !== "" || populaere.length === 0;   // berre før du har søkt
+
+    // Personar der brukarnamnet inneheld søkeordet
+    const personar = Object.keys(profilar).filter((uid) =>
+        uid !== minUid && profilar[uid].brukarnamn.toLowerCase().includes(ord));
+
+    finn("sok-personar").innerHTML = personar.map((uid) => `
+        <button class="person til-profil" data-uid="${vask(uid)}">
+            <span class="avatar liten">${bileteHTML(profilar[uid])}</span>
+            <span><b>${vask(profilar[uid].brukarnamn)}</b><small>${vask(profilar[uid].bio || "")}</small></span>
+        </button>`).join("");
+    finn("sok-personar-tittel").hidden = personar.length === 0;
+    finn("sok-personar-tittel").textContent = ord === "" ? "Personar på DigiBook" : "Personar";
+    vedKlikk(finn("sok-personar"), ".til-profil", (knapp) => visProfil(knapp.dataset.uid));
+
+    // Tekstar: berre når det er skrive eit søkeord
+    finn("sok-tekstar-tittel").hidden = ord === "";
+    if (ord === "") {
+        finn("sok-liste").innerHTML = "";
+        return;
+    }
     const treff = alle.filter((i) =>
         i.emne.includes(ord) ||
         (i.tittel || "").toLowerCase().includes(ord) ||
         i.tekst.toLowerCase().includes(ord));
-    visInnlegg("sok-liste", treff);
+    visInnlegg("sok-liste", treff, "Fann ingen tekstar.");
 }
 
 
-// ---------- 12. PROFIL (din eigen eller andre sin) ----------
+// ---------- 15. PROFIL (din eigen eller andre sin) ----------
+
+let visarProfil = null;   // ID-en til profilen som er open no
 
 async function visProfil(uid) {
+    visarProfil = uid;
     const erMeg = uid === minUid;
     visSide("side-profil");
     finn("pynt-boks").hidden = true;
     if (!erMeg) finn("meny-profil").classList.remove("aktiv");
 
-    const alle = await hentAlleInnlegg();   // hentar òg profilane
-    const profil = erMeg ? minProfil : profilar[uid];
+    // Mine: alle tekstane mine, òg private. Andre: berre deira offentlege.
+    const tekstar = erMeg ? await hentMine() : (await hentOffentlege()).filter((i) => i.uid === uid);
+    const profil = profilar[uid];
 
     finn("profil-kort").className = "kort profil-kort farge-" + profil.farge;
     finn("profil-bilete").innerHTML = bileteHTML(profil);
@@ -513,30 +727,62 @@ async function visProfil(uid) {
     finn("profil-bio").textContent = profil.bio || (erMeg ? "Du har ikkje skrive noko om deg sjølv enno." : "");
     finn("profil-interesser").textContent = profil.interesser.map((e) => "#" + e).join("   ");
 
-    // Berre på din eigen profil kan du redigere
-    finn("profil-knappar").hidden = !erMeg;
-    finn("profil-tekstar-tittel").textContent = erMeg ? "Mine tekstar" : "Tekstar av " + profil.brukarnamn;
+    // Tel følgjarar: alle profilar som har denne personen i "folgjer"-lista si
+    const folgjarar = Object.values(profilar).filter((p) => (p.folgjer || []).includes(uid)).length;
+    const ordet = folgjarar === 1 ? "følgjar" : "følgjarar";
+    finn("profil-tal").textContent = `${folgjarar} ${ordet} · følgjer ${(profil.folgjer || []).length}`;
 
-    // PERSONVERN: anonyme tekstar skal ALDRI synast på profilen til andre
-    const tekstar = alle.filter((i) => i.uid === uid && (erMeg || !i.anonym));
-    visInnlegg("profil-liste", tekstar);
+    // Eigen profil: rediger-knappar. Andre: følg-knapp.
+    finn("profil-knappar").hidden = !erMeg;
+    finn("knapp-folg").hidden = erMeg;
+    const folgjerAllereie = (minProfil.folgjer || []).includes(uid);
+    finn("knapp-folg").textContent = folgjerAllereie ? "Følgjer ✓" : "Følg";
+    finn("knapp-folg").className = folgjerAllereie ? "kvit" : "";
+
+    finn("profil-tekstar-tittel").textContent = erMeg ? "Mine tekstar" : "Tekstar av " + profil.brukarnamn;
+    visInnlegg("profil-liste", tekstar, erMeg ? "Du har ikkje skrive noko enno." : "Ingen tekstar enno.");
 }
 
+// Følg eller slutt å følgje
+finn("knapp-folg").onclick = async () => {
+    const ref = doc(db, "brukarar", minUid);
+    if ((minProfil.folgjer || []).includes(visarProfil)) {
+        await updateDoc(ref, { folgjer: arrayRemove(visarProfil) });
+    } else {
+        await updateDoc(ref, { folgjer: arrayUnion(visarProfil) });
+    }
+    visProfil(visarProfil);
+};
 
-// ---------- 13. SKRIV NY TEKST ----------
 
-let valdeEmne = [];   // emna brukaren har valt
-let valtHumor = "";   // humøret brukaren har valt
+// ---------- 16. SKRIV NY TEKST (eller rediger) ----------
+
+let valdeEmne = [];     // emna brukaren har valt
+let valtHumor = "";     // humøret brukaren har valt
+let redigerer = null;   // teksten som vert redigert (null = ny tekst)
 
 finn("knapp-avbryt-nytt").onclick = () => visProfil(minUid);
 
-function opneSkriv() {
-    valdeEmne = [];
-    valtHumor = "";
-    finn("nytt-tittel").value = "";
-    finn("nytt-tekst").value = "";
-    finn("nytt-anonym").checked = false;
-    finn("anonym-info").hidden = true;
+function opneSkriv(innlegg) {
+    redigerer = innlegg;
+    if (innlegg) {
+        // Rediger: fyll inn det som står der frå før
+        finn("nytt-tittel").value = innlegg.tittel || "";
+        finn("nytt-tekst").innerHTML = innlegg.html ? rensHTML(innlegg.html) : vask(innlegg.tekst);
+        finn("nytt-privat").checked = innlegg.privat;
+        valdeEmne = [...innlegg.emne];
+        valtHumor = innlegg.humor || "";
+        finn("knapp-publiser").textContent = "Lagre endringar";
+    } else {
+        // Ny tekst: tomt ark
+        finn("nytt-tittel").value = "";
+        finn("nytt-tekst").innerHTML = "";
+        finn("nytt-privat").checked = false;
+        valdeEmne = [];
+        valtHumor = "";
+        finn("knapp-publiser").textContent = "Publiser";
+    }
+    finn("privat-info").hidden = !finn("nytt-privat").checked;
     finn("skriv-dato").textContent = new Date().toLocaleDateString("nn-NO",
         { weekday: "long", day: "numeric", month: "long", year: "numeric" });
     teiknEmne();
@@ -551,13 +797,8 @@ function teiknEmne() {
     lagValKnappar("nytt-emne-liste", alternativ, valdeEmne);
 }
 
-// Legg til eit eige emne, t.d. "hest"
 finn("knapp-legg-til-emne").onclick = () => {
-    const ord = finn("eige-emne").value.toLowerCase().replace(/[^a-zæøå0-9_]/g, "");
-    if (ord !== "" && !valdeEmne.includes(ord)) {
-        valdeEmne.push(ord);
-    }
-    finn("eige-emne").value = "";
+    leggTilEige("eige-emne", valdeEmne);
     teiknEmne();
 };
 
@@ -576,60 +817,80 @@ function teiknHumor() {
     }
 }
 
-// B / I / U-knappane: set teikn rundt teksten du har merka
+// B / I / U / Liste: nettlesaren gjer den merka teksten feit, kursiv osv.
 document.querySelectorAll(".format").forEach((knapp) => {
-    knapp.onclick = () => {
-        const felt = finn("nytt-tekst");
-        const merke = knapp.dataset.merke;
-        const start = felt.selectionStart;
-        const slutt = felt.selectionEnd;
-        const merka = felt.value.slice(start, slutt) || "tekst";
-
-        felt.value = felt.value.slice(0, start) + merke + merka + merke + felt.value.slice(slutt);
-        felt.focus();
+    knapp.onmousedown = (hending) => {
+        hending.preventDefault();   // så teksten du har merka ikkje vert "umerka"
+        document.execCommand(knapp.dataset.kommando);
+        oppdaterVerktoy();
     };
 });
 
+// Knappane lyser når skrifta der du skriv er feit, kursiv osv.
+function oppdaterVerktoy() {
+    document.querySelectorAll(".format").forEach((knapp) => {
+        knapp.classList.toggle("aktiv", document.queryCommandState(knapp.dataset.kommando));
+    });
+}
+document.addEventListener("selectionchange", oppdaterVerktoy);
+
+// Når du limer inn tekst, tek me berre med sjølve teksten (ikkje farge, storleik osv.)
+finn("nytt-tekst").onpaste = (hending) => {
+    hending.preventDefault();
+    document.execCommand("insertText", false, hending.clipboardData.getData("text/plain"));
+};
+
 // Teljar ord, som i Word
 function oppdaterOrdteljar() {
-    const ord = finn("nytt-tekst").value.trim().split(/\s+/).filter((o) => o !== "");
+    const ord = finn("nytt-tekst").innerText.trim().split(/\s+/).filter((o) => o !== "");
     finn("ordteljar").textContent = ord.length + " ord";
 }
 finn("nytt-tekst").oninput = oppdaterOrdteljar;
 
-// Vis forklaring når brukaren vel å vere anonym
-finn("nytt-anonym").onchange = () => {
-    finn("anonym-info").hidden = !finn("nytt-anonym").checked;
+finn("nytt-privat").onchange = () => {
+    finn("privat-info").hidden = !finn("nytt-privat").checked;
 };
 
 finn("knapp-publiser").onclick = async () => {
-    const tekst = finn("nytt-tekst").value.trim();
+    const tekst = finn("nytt-tekst").innerText.trim();   // rein tekst (til søk og rapportar)
     if (tekst === "") {
         visMelding("Du må skrive noko før du kan publisere.");
         return;
     }
-    const anonym = finn("nytt-anonym").checked;
+    const html = rensHTML(finn("nytt-tekst").innerHTML);   // tekst med feit, kursiv osv.
 
     // Finn #emne skrivne i teksten, og slå dei saman med dei valde (Set fjernar duplikat)
     const fraTeksten = (tekst.match(/#[a-zæøå0-9_]+/gi) || []).map((e) => e.slice(1).toLowerCase());
     const emne = [...new Set([...valdeEmne, ...fraTeksten])];
 
-    await addDoc(collection(db, "innlegg"), {
-        uid: minUid,
-        brukarnamn: anonym ? "" : minProfil.brukarnamn,   // anonym = namnet vert ikkje lagra
-        anonym: anonym,
+    const data = {
         tittel: finn("nytt-tittel").value.trim(),
+        html: html,
         tekst: tekst,
         emne: emne,
         humor: valtHumor,
-        hjarte: [],
-        dato: Date.now()
-    });
+        privat: finn("nytt-privat").checked
+    };
+
+    if (redigerer) {
+        // Rediger ein tekst som finst frå før
+        await updateDoc(doc(db, "innlegg", redigerer.id), { ...data, redigert: true });
+    } else {
+        // Ny tekst
+        await addDoc(collection(db, "innlegg"), {
+            uid: minUid,
+            forfattarUid: minUid,
+            ...data,
+            delt: false,
+            hjarte: [],
+            dato: Date.now()
+        });
+    }
     visProfil(minUid);
 };
 
 
-// ---------- 14. REDIGER PROFIL ----------
+// ---------- 17. REDIGER PROFIL ----------
 
 let valtBilete = "";
 let valtFarge = "";
