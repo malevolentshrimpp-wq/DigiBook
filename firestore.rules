@@ -1,0 +1,44 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Profilane til brukarane
+    match /brukarar/{uid} {
+      // Alle som er logga inn kan sjå profilar
+      allow read: if request.auth != null;
+      // Du kan berre lage og endre din EIGEN profil
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // E-postane. Berre du sjølv kan sjå din eigen.
+    match /privat/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Tekstane (innlegga)
+    match /innlegg/{id} {
+      // Alle som er logga inn kan lese tekstar
+      allow read: if request.auth != null;
+      // Du kan berre lage tekstar i ditt eige namn
+      allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+      // Andre kan berre endre hjarte-lista (gje hjarte), ikkje teksten
+      allow update: if request.auth != null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hjarte']);
+      // Du kan berre slette dine eigne tekstar
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+
+      // Svar under ein tekst
+      match /svar/{svarId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null && request.resource.data.uid == request.auth.uid;
+        allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+      }
+    }
+
+    // Rapportar. Alle kan sende, men ingen kan lese dei frå nettsida.
+    // Berre du som admin ser dei inne i Firebase.
+    match /rapportar/{id} {
+      allow create: if request.auth != null && request.resource.data.rapportertAv == request.auth.uid;
+    }
+  }
+}

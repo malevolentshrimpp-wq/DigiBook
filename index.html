@@ -1,16 +1,201 @@
 <!DOCTYPE html>
-<html lang="no">
+<html lang="nn">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DigiBook</title>
-    <!-- Koblar til CSS-fila di for design -->
+    <!-- Skrifttypar frå Google Fonts: Lora (overskrifter) og Inter (vanleg tekst) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Lora:wght@500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Velkomen til DigiBook</h1>
-    
-    <!-- Her koblar du til script.js-fila di som snakkar med Firebase -->
+
+    <!-- MENY ØVST (berre synleg når du er logga inn) -->
+    <header id="meny" hidden>
+        <span class="logo">DigiBook</span>
+        <nav>
+            <button id="meny-feed" class="meny-knapp" data-side="side-feed">Til deg</button>
+            <button id="meny-alle" class="meny-knapp" data-side="side-alle">Alle tekstar</button>
+            <button id="meny-sok" class="meny-knapp" data-side="side-sok">Søk</button>
+            <button id="meny-profil" class="meny-knapp" data-side="side-profil">Profil</button>
+        </nav>
+        <div class="meny-hogre">
+            <button id="meny-skriv">Skriv ny tekst</button>
+            <button id="knapp-loggut" class="lenke">Logg ut</button>
+        </div>
+    </header>
+
+    <main>
+        <!-- Her kjem feilmeldingar -->
+        <p id="melding" hidden></p>
+
+        <!-- ===== SIDE: LOGG INN ===== -->
+        <section id="side-logginn" class="side">
+            <div class="kort smal">
+                <h1 class="logo stor">DigiBook</h1>
+                <p class="grå">Ein dagbok du deler med andre.</p>
+                <label>Brukarnamn <span class="grå">(berre når du lagar ny konto)</span>
+                    <input type="text" id="brukarnamn" maxlength="20">
+                </label>
+                <label>E-post
+                    <input type="email" id="epost">
+                </label>
+                <label>Passord
+                    <input type="password" id="passord">
+                </label>
+                <button id="knapp-logginn" class="heil">Logg inn</button>
+                <button id="knapp-lagkonto" class="kvit heil">Lag ny konto</button>
+            </div>
+        </section>
+
+        <!-- ===== SIDE: VEL INTERESSER ===== -->
+        <section id="side-interesser" class="side" hidden>
+            <div class="kort smal">
+                <h2>Kva er du interessert i?</h2>
+                <p class="grå">Vel det du likar, så viser me deg tekstar frå andre om dette.</p>
+                <div id="interesse-liste"></div>
+                <button id="knapp-lagre-interesser" class="heil">Ferdig</button>
+            </div>
+        </section>
+
+        <!-- ===== SIDE: TIL DEG ===== -->
+        <section id="side-feed" class="side" hidden>
+            <div class="side-topp">
+                <h2>Til deg</h2>
+                <p id="feed-tekst" class="grå"></p>
+            </div>
+            <div id="feed-liste" class="rutenett"></div>
+        </section>
+
+        <!-- ===== SIDE: ALLE TEKSTAR ===== -->
+        <section id="side-alle" class="side" hidden>
+            <div class="side-topp">
+                <h2>Alle tekstar</h2>
+                <p class="grå">Alt som er skrive på DigiBook, med det nyaste først.</p>
+            </div>
+            <div id="alle-liste" class="rutenett"></div>
+        </section>
+
+        <!-- ===== SIDE: SØK ===== -->
+        <section id="side-sok" class="side" hidden>
+            <div class="side-topp">
+                <h2>Søk</h2>
+                <div class="rad">
+                    <input type="text" id="sok-felt" placeholder="Søk etter eit emne eller eit ord, t.d. stress">
+                    <button id="knapp-sok">Søk</button>
+                </div>
+            </div>
+            <div id="sok-liste" class="rutenett"></div>
+        </section>
+
+        <!-- ===== SIDE: EIN TEKST MED SVAR ===== -->
+        <section id="side-innlegg" class="side" hidden>
+            <div class="svar-omrade">
+                <button id="knapp-tilbake" class="lenke">← Tilbake</button>
+            </div>
+            <div id="innlegg-stor"></div>
+            <div class="svar-omrade">
+                <h2>Svar</h2>
+                <div id="svar-liste"></div>
+                <div class="kort svar-skjema">
+                    <textarea id="svar-tekst" rows="3" placeholder="Skriv eit svar ..."></textarea>
+                    <div class="svar-botn">
+                        <label class="avkryss"><input type="checkbox" id="svar-anonym"> Svar anonymt</label>
+                        <button id="knapp-svar">Send svar</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== SIDE: SKRIV (ser ut som eit Word-dokument) ===== -->
+        <section id="side-skriv" class="side" hidden>
+            <div class="skriv-ramme">
+                <!-- Verktøylinja -->
+                <div class="verktoy">
+                    <button class="format" data-merke="**" title="Feit skrift"><b>B</b></button>
+                    <button class="format" data-merke="*" title="Kursiv"><i>I</i></button>
+                    <button class="format" data-merke="__" title="Understreka"><u>U</u></button>
+                    <span class="skilje"></span>
+                    <span class="grå">Humør</span>
+                    <span id="humor-liste"></span>
+                    <label class="avkryss"><input type="checkbox" id="nytt-anonym"> Post anonymt</label>
+                </div>
+
+                <!-- Det kvite arket -->
+                <div class="skrivebord">
+                    <div class="dokument">
+                        <p id="skriv-dato"></p>
+                        <input type="text" id="nytt-tittel" class="tittel-felt" placeholder="Tittel" maxlength="80">
+                        <textarea id="nytt-tekst" placeholder="Kjære dagbok ..."></textarea>
+                    </div>
+                </div>
+
+                <!-- Emne -->
+                <div class="emne-panel">
+                    <p class="etikett">Kva handlar teksten om?</p>
+                    <div id="nytt-emne-liste"></div>
+                    <div class="rad">
+                        <input type="text" id="eige-emne" placeholder="Eige emne, t.d. hest" maxlength="20">
+                        <button id="knapp-legg-til-emne" class="kvit">Legg til</button>
+                    </div>
+                    <p id="anonym-info" class="anonym-info" hidden>
+                        <b>Du postar anonymt.</b> Andre ser ikkje namnet eller profilbiletet ditt.
+                        Viss teksten vert rapportert, kan admin likevel sjå kven som skreiv han.
+                    </p>
+                </div>
+
+                <!-- Statuslinja nedst -->
+                <div class="statuslinje">
+                    <span id="ordteljar" class="grå">0 ord</span>
+                    <span>
+                        <button id="knapp-avbryt-nytt" class="kvit">Avbryt</button>
+                        <button id="knapp-publiser">Publiser</button>
+                    </span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== SIDE: PROFIL ===== -->
+        <section id="side-profil" class="side" hidden>
+            <div id="profil-kort" class="kort profil-kort">
+                <div class="banner"></div>
+                <div id="profil-bilete" class="avatar"></div>
+                <h2 id="profil-namn"></h2>
+                <p id="profil-bio"></p>
+                <p id="profil-interesser" class="grå"></p>
+                <div id="profil-knappar" class="profil-knappar">
+                    <button id="knapp-pynt" class="kvit">Rediger profil</button>
+                    <button id="knapp-endre-interesser" class="kvit">Endre interesser</button>
+                </div>
+            </div>
+
+            <!-- Rediger profilen (skjult til du trykkjer på knappen) -->
+            <div id="pynt-boks" class="kort pynt" hidden>
+                <h2>Rediger profil</h2>
+                <p class="etikett">Profilbilete</p>
+                <div id="pynt-forhand" class="avatar"></div>
+                <label class="last-opp">Last opp bilete
+                    <input type="file" id="bilete-fil" accept="image/*" hidden>
+                </label>
+                <button id="knapp-fjern-bilete" class="lenke">Fjern bilete</button>
+
+                <p class="etikett">Farge</p>
+                <div id="farge-liste"></div>
+
+                <label class="etikett">Om meg
+                    <textarea id="pynt-bio" rows="3" maxlength="200"></textarea>
+                </label>
+                <button id="knapp-lagre-pynt">Lagre</button>
+                <button id="knapp-avbryt-pynt" class="kvit">Avbryt</button>
+            </div>
+
+            <div class="side-topp">
+                <h2 id="profil-tekstar-tittel">Mine tekstar</h2>
+            </div>
+            <div id="profil-liste" class="rutenett"></div>
+        </section>
+    </main>
+
     <script type="module" src="script.js"></script>
 </body>
 </html>
