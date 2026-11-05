@@ -45,6 +45,18 @@ const FORSLAG = [
 const FARGAR = ["kaffi", "rosa", "salvie", "lavendel", "himmel"];
 const HUMOR = ["😊", "🥰", "😢", "😡", "😰", "😴"];
 const REAKSJONAR = ["❤️", "😂", "😮", "😢", "👏", "🙏"];
+const SKRIVEFORSLAG = [
+    "Kva gjorde deg glad i dag?",
+    "Noko du gruar deg til",
+    "Tre ting du er takknemleg for",
+    "Kva ville du sagt til deg sjølv for eitt år sidan?",
+    "Ein ting som irriterte deg i dag",
+    "Kva drøymer du om?",
+    "Den beste dagen du hugsar",
+    "Noko du aldri har fortalt nokon",
+    "Kva treng du akkurat no?",
+    "Ein person som betyr mykje for deg"
+];
 
 
 // ---------- 3. HJELPEFUNKSJONAR ----------
@@ -135,6 +147,16 @@ function forfattarHTML(uid, tid) {
         </button>`;
 }
 
+// Eit lite kort med bilete, namn og bio for ein person (brukt i søk og følgjar-lista)
+function personHTML(uid) {
+    const profil = profilar[uid];
+    return `
+        <button class="person til-profil" data-uid="${vask(uid)}">
+            <span class="avatar liten">${bileteHTML(profil)}</span>
+            <span><b>${vask(profil.brukarnamn)}</b><small>${vask(profil.bio || "")}</small></span>
+        </button>`;
+}
+
 // Finn ein knapp inni eit element og bestem kva som skjer når du trykkjer
 function vedKlikk(element, klasse, handling) {
     element.querySelectorAll(klasse).forEach((knapp) => {
@@ -182,15 +204,10 @@ function leggTilEige(feltId, liste) {
 finn("til-registrer").onclick = () => visSide("side-registrer");
 finn("til-logginn").onclick = () => visSide("side-logginn");
 
-// Enter i passordfeltet = trykk på knappen
-finn("logginn-passord").onkeydown = (hending) => {
-    if (hending.key === "Enter") finn("knapp-logginn").click();
-};
-finn("reg-passord").onkeydown = (hending) => {
-    if (hending.key === "Enter") finn("knapp-lagkonto").click();
-};
-
-finn("knapp-logginn").onclick = async () => {
+// Skjema: "onsubmit" køyrer både når du trykkjer på knappen og når du trykkjer Enter.
+// preventDefault() stoppar nettlesaren frå å laste sida på nytt.
+finn("logginn-skjema").onsubmit = async (hending) => {
+    hending.preventDefault();
     nyttBrukarnamn = null;
     try {
         await signInWithEmailAndPassword(auth, finn("logginn-epost").value, finn("logginn-passord").value);
@@ -199,7 +216,8 @@ finn("knapp-logginn").onclick = async () => {
     }
 };
 
-finn("knapp-lagkonto").onclick = async () => {
+finn("registrer-skjema").onsubmit = async (hending) => {
+    hending.preventDefault();
     const brukarnamn = finn("reg-brukarnamn").value.trim();
     const epost = finn("reg-epost").value;
     const passord = finn("reg-passord").value;
@@ -232,6 +250,7 @@ finn("knapp-loggut").onclick = () => signOut(auth);
 // Denne køyrer kvar gong nokon loggar inn eller ut
 onAuthStateChanged(auth, async (brukar) => {
     if (!brukar) {
+        minUid = null;
         finn("meny").hidden = true;
         visSide("side-logginn");
         return;
@@ -359,7 +378,7 @@ function innleggHTML(innlegg) {
     const erMin = innlegg.uid === minUid;
     const hjarte = innlegg.hjarte || [];
     const tittel = innlegg.tittel ? `<h3>${vask(innlegg.tittel)}</h3>` : "";
-    const tekst = innlegg.html ? rensHTML(innlegg.html) : vask(innlegg.tekst);
+    const tekst = rensHTML(innlegg.html);
     const emne = innlegg.emne.map((e) => `<button class="emne lite">#${vask(e)}</button>`).join("");
 
     // Små merke: privat og redigert
@@ -381,14 +400,15 @@ function innleggHTML(innlegg) {
     if (erMin) hogre = `<button class="lenke rediger">Rediger</button> <button class="lenke slett">Slett</button>`;
 
     return `
-        <article class="innlegg ${innlegg.privat ? "privat" : ""}">
+        <article class="innlegg ${innlegg.privat ? "privat" : ""}" data-id="${vask(innlegg.id)}">
             <div class="innlegg-topp">
-                ${forfattarHTML(innlegg.forfattarUid || innlegg.uid, innlegg.dato)}
+                ${forfattarHTML(innlegg.uid, innlegg.dato)}
                 <span class="humor">${vask(innlegg.humor || "")}</span>
             </div>
             <div class="innhald">
                 ${tittel}
                 <div class="tekst">${tekst}</div>
+                <span class="les-meir">Les meir →</span>
             </div>
             <div class="merke-rad">${merke}</div>
             <div>${emne}</div>
@@ -410,6 +430,14 @@ function visInnlegg(boksId, liste, tomTekst) {
 
     // Kopl kvar tekst på sida (nr 0, 1, 2 ...) til rett tekst i lista
     boks.querySelectorAll(".innlegg").forEach((kort, nr) => koplKnappar(kort, liste[nr]));
+    merkLangeTekstar(boks);
+}
+
+// Lange tekstar vert kutta i rutenettet. Dei får "Les meir →" nedst.
+function merkLangeTekstar(boks) {
+    boks.querySelectorAll(".tekst").forEach((tekst) => {
+        tekst.classList.toggle("kutta", tekst.scrollHeight > tekst.clientHeight);
+    });
 }
 
 // Bestem kva alle knappane i éin tekst gjer
@@ -440,8 +468,11 @@ async function gjeHjarte(innlegg, knapp) {
         await updateDoc(ref, { hjarte: arrayUnion(minUid) });
         innlegg.hjarte.push(minUid);
     }
-    knapp.textContent = "♥ " + innlegg.hjarte.length;
-    knapp.classList.toggle("vald", innlegg.hjarte.includes(minUid));
+    // Oppdater alle hjarte-knappane for denne teksten (han kan synast fleire stader)
+    document.querySelectorAll(`.innlegg[data-id="${innlegg.id}"] .hjarte`).forEach((k) => {
+        k.textContent = "♥ " + innlegg.hjarte.length;
+        k.classList.toggle("vald", innlegg.hjarte.includes(minUid));
+    });
 }
 
 // Del (republiser) ein annan sin tekst på profilen din, eller angre delinga.
@@ -473,6 +504,12 @@ async function delInnlegg(innlegg, knapp) {
 // Slett ein av dine eigne tekstar
 async function slettInnlegg(innlegg, kort) {
     if (!confirm("Vil du slette denne teksten?")) return;
+
+    // Slett svara under teksten først, så dei ikkje vert liggjande att i databasen
+    const svar = await getDocs(collection(db, "innlegg", innlegg.id, "svar"));
+    for (const s of svar.docs) {
+        await deleteDoc(s.ref);
+    }
     await deleteDoc(doc(db, "innlegg", innlegg.id));
     kort.remove();
     if (kort.classList.contains("stor")) visProfil(minUid);   // var teksten open, gå til profilen
@@ -502,7 +539,7 @@ finn("rapport-send").onclick = async () => {
         tekst: rapportInnlegg.tekst,
         grunn: grunn,
         meir: finn("rapport-meir").value.trim(),
-        forfattarUid: rapportInnlegg.forfattarUid || rapportInnlegg.uid,
+        forfattarUid: rapportInnlegg.uid,
         rapportertAv: minUid,
         dato: Date.now()
     });
@@ -550,7 +587,7 @@ async function visSvar() {
         <div class="svar">
             <div class="svar-topp">
                 ${forfattarHTML(s.uid, s.dato)}
-                ${s.uid === minUid ? `<button class="lenke slett">Slett</button>` : ""}
+                ${s.uid === minUid || opentInnlegg.uid === minUid ? `<button class="lenke slett">Slett</button>` : ""}
             </div>
             <p>${vask(s.tekst)}</p>
             <div class="svar-reaksjonar">
@@ -562,6 +599,7 @@ async function visSvar() {
     finn("svar-liste").querySelectorAll(".svar").forEach((boks, nr) => {
         const s = liste[nr];
         vedKlikk(boks, ".til-profil", (knapp) => visProfil(knapp.dataset.uid));
+        // Du kan slette dine eigne svar, og alle svar under dine eigne tekstar
         vedKlikk(boks, ".slett", async () => {
             if (!confirm("Vil du slette svaret?")) return;
             await deleteDoc(doc(db, "innlegg", opentInnlegg.id, "svar", s.id));
@@ -653,8 +691,18 @@ async function reager(s, emoji) {
 
 // ---------- 12. TIL DEG ----------
 
+// Helsing etter kva tid det er på døgnet, t.d. "God kveld, Matilda 🌙"
+function helsing(namn) {
+    const time = new Date().getHours();
+    if (time < 5) return `God natt, ${namn} 🌙`;
+    if (time < 10) return `God morgon, ${namn} ☀️`;
+    if (time < 18) return `Hei, ${namn} 👋`;
+    return `God kveld, ${namn} 🌙`;
+}
+
 async function visFeed() {
     visSide("side-feed");
+    finn("feed-tittel").textContent = helsing(minProfil.brukarnamn);
     const alle = await hentOriginale();
     const folgjer = minProfil.folgjer || [];
 
@@ -665,7 +713,7 @@ async function visFeed() {
         i.emne.some((e) => minProfil.interesser.includes(e)));
 
     if (forDeg.length > 0) {
-        finn("feed-tekst").textContent = "Tekstar om ting du likar, frå folk du følgjer, og dine eigne.";
+        finn("feed-tekst").textContent = "Tekstar om ting du likar, frå folk du følger, og dine eigne.";
         visInnlegg("feed-liste", forDeg, "");
     } else if (alle.length > 0) {
         finn("feed-tekst").textContent = "Ingen har skrive om interessene dine enno. Her er dei nyaste tekstane.";
@@ -687,9 +735,9 @@ async function visAlle() {
 
 // ---------- 14. SØK (personar og tekstar) ----------
 
-finn("knapp-sok").onclick = () => sok(finn("sok-felt").value);
-finn("sok-felt").onkeydown = (hending) => {
-    if (hending.key === "Enter") sok(finn("sok-felt").value);
+finn("sok-skjema").onsubmit = (hending) => {
+    hending.preventDefault();
+    sok(finn("sok-felt").value);
 };
 
 async function sok(ord) {
@@ -712,11 +760,7 @@ async function sok(ord) {
     const personar = Object.keys(profilar).filter((uid) =>
         uid !== minUid && profilar[uid].brukarnamn.toLowerCase().includes(ord));
 
-    finn("sok-personar").innerHTML = personar.map((uid) => `
-        <button class="person til-profil" data-uid="${vask(uid)}">
-            <span class="avatar liten">${bileteHTML(profilar[uid])}</span>
-            <span><b>${vask(profilar[uid].brukarnamn)}</b><small>${vask(profilar[uid].bio || "")}</small></span>
-        </button>`).join("");
+    finn("sok-personar").innerHTML = personar.map(personHTML).join("");
     finn("sok-personar-tittel").hidden = personar.length === 0;
     finn("sok-personar-tittel").textContent = ord === "" ? "Personar på DigiBook" : "Personar";
     vedKlikk(finn("sok-personar"), ".til-profil", (knapp) => visProfil(knapp.dataset.uid));
@@ -764,16 +808,22 @@ async function visProfil(uid) {
     finn("profil-bio").textContent = profil.bio || (erMeg ? "Du har ikkje skrive noko om deg sjølv enno." : "");
     finn("profil-interesser").textContent = profil.interesser.map((e) => "#" + e).join("   ");
 
-    // Tel følgjarar: alle profilar som har denne personen i "folgjer"-lista si
-    const folgjarar = Object.values(profilar).filter((p) => (p.folgjer || []).includes(uid)).length;
-    const ordet = folgjarar === 1 ? "følgjar" : "følgjarar";
-    finn("profil-tal").textContent = `${folgjarar} ${ordet} · følgjer ${(profil.folgjer || []).length}`;
+    // Følgjarar: alle profilar som har denne personen i "folgjer"-lista si
+    const folgjarar = Object.keys(profilar).filter((id) => (profilar[id].folgjer || []).includes(uid));
+    // Følgjer: personane i "folgjer"-lista til denne personen (som framleis finst)
+    const folgjer = (profil.folgjer || []).filter((id) => profilar[id]);
+
+    const ordet = folgjarar.length === 1 ? "følger" : "følgere";
+    finn("knapp-folgjarar").textContent = `${folgjarar.length} ${ordet}`;
+    finn("knapp-folgjer").textContent = `følger ${folgjer.length}`;
+    finn("knapp-folgjarar").onclick = () => visFolgListe("Følgere", folgjarar);
+    finn("knapp-folgjer").onclick = () => visFolgListe(profil.brukarnamn + " følger", folgjer);
 
     // Eigen profil: rediger-knappar. Andre: følg-knapp.
     finn("profil-knappar").hidden = !erMeg;
     finn("knapp-folg").hidden = erMeg;
     const folgjerAllereie = (minProfil.folgjer || []).includes(uid);
-    finn("knapp-folg").textContent = folgjerAllereie ? "Følgjer ✓" : "Følg";
+    finn("knapp-folg").textContent = folgjerAllereie ? "Følger ✓" : "Følg";
     finn("knapp-folg").className = folgjerAllereie ? "kvit" : "";
 
     // To faner: "Tekstar" og "Delt"
@@ -791,9 +841,27 @@ function visFane(fane) {
     finn("profil-delt-liste").hidden = fane !== "delt";
     finn("fane-tekstar").classList.toggle("aktiv", fane === "tekstar");
     finn("fane-delt").classList.toggle("aktiv", fane === "delt");
+    merkLangeTekstar(finn(fane === "delt" ? "profil-delt-liste" : "profil-liste"));
 }
 finn("fane-tekstar").onclick = () => visFane("tekstar");
 finn("fane-delt").onclick = () => visFane("delt");
+
+// Viser eit vindauge med ei liste over personar (følgjarar eller dei personen følgjer)
+function visFolgListe(tittel, personar) {
+    finn("folg-tittel").textContent = tittel;
+    if (personar.length === 0) {
+        finn("folg-liste").innerHTML = `<p class="grå">Ingen her enno.</p>`;
+    } else {
+        finn("folg-liste").innerHTML = personar.map(personHTML).join("");
+    }
+    // Trykk på ein person = lukk vindauget og gå til profilen
+    vedKlikk(finn("folg-liste"), ".til-profil", (knapp) => {
+        finn("folg-dialog").close();
+        visProfil(knapp.dataset.uid);
+    });
+    finn("folg-dialog").showModal();
+}
+finn("folg-lukk").onclick = () => finn("folg-dialog").close();
 
 // Følg eller slutt å følgje
 finn("knapp-folg").onclick = async () => {
@@ -820,15 +888,18 @@ function opneSkriv(innlegg) {
     if (innlegg) {
         // Rediger: fyll inn det som står der frå før
         finn("nytt-tittel").value = innlegg.tittel || "";
-        finn("nytt-tekst").innerHTML = innlegg.html ? rensHTML(innlegg.html) : vask(innlegg.tekst);
+        finn("nytt-tekst").innerHTML = rensHTML(innlegg.html);
         finn("nytt-privat").checked = innlegg.privat;
         valdeEmne = [...innlegg.emne];
         valtHumor = innlegg.humor || "";
         finn("knapp-publiser").textContent = "Lagre endringar";
+        finn("utkast-info").hidden = true;
     } else {
-        // Ny tekst: tomt ark
-        finn("nytt-tittel").value = "";
-        finn("nytt-tekst").innerHTML = "";
+        // Ny tekst: hent fram utkastet viss du har eit, elles tomt ark
+        const utkast = hentUtkast();
+        finn("nytt-tittel").value = utkast ? utkast.tittel : "";
+        finn("nytt-tekst").innerHTML = utkast ? rensHTML(utkast.html) : "";
+        finn("utkast-info").hidden = !utkast;
         finn("nytt-privat").checked = false;
         valdeEmne = [];
         valtHumor = "";
@@ -874,30 +945,59 @@ document.querySelectorAll(".format").forEach((knapp) => {
     knapp.onmousedown = (hending) => {
         hending.preventDefault();   // så teksten du har merka ikkje vert "umerka"
         document.execCommand(knapp.dataset.kommando);
-        oppdaterVerktoy();
     };
 });
-
-// Knappane lyser når skrifta der du skriv er feit, kursiv osv.
-function oppdaterVerktoy() {
-    document.querySelectorAll(".format").forEach((knapp) => {
-        knapp.classList.toggle("aktiv", document.queryCommandState(knapp.dataset.kommando));
-    });
-}
-document.addEventListener("selectionchange", oppdaterVerktoy);
-
-// Når du limer inn tekst, tek me berre med sjølve teksten (ikkje farge, storleik osv.)
-finn("nytt-tekst").onpaste = (hending) => {
-    hending.preventDefault();
-    document.execCommand("insertText", false, hending.clipboardData.getData("text/plain"));
-};
 
 // Teljar ord, som i Word
 function oppdaterOrdteljar() {
     const ord = finn("nytt-tekst").innerText.trim().split(/\s+/).filter((o) => o !== "");
     finn("ordteljar").textContent = ord.length + " ord";
 }
-finn("nytt-tekst").oninput = oppdaterOrdteljar;
+finn("nytt-tekst").oninput = () => {
+    oppdaterOrdteljar();
+    lagreUtkast();
+};
+finn("nytt-tittel").oninput = lagreUtkast;
+
+// UTKAST: teksten du skriv vert lagra i nettlesaren medan du skriv.
+// Lukkar du sida ved eit uhell, får du han att neste gong.
+// PERSONVERN: utkastet ligg berre på denne maskina, og er knytt til kontoen din.
+function utkastNokkel() {
+    return "digibook-utkast-" + minUid;
+}
+
+function lagreUtkast() {
+    if (redigerer) return;   // berre for nye tekstar
+    const tittel = finn("nytt-tittel").value;
+    const tomt = tittel === "" && finn("nytt-tekst").innerText.trim() === "";
+    if (tomt) {
+        localStorage.removeItem(utkastNokkel());
+    } else {
+        localStorage.setItem(utkastNokkel(), JSON.stringify({ tittel: tittel, html: finn("nytt-tekst").innerHTML }));
+    }
+}
+
+// Gir utkastet, eller null viss det ikkje finst noko
+function hentUtkast() {
+    return JSON.parse(localStorage.getItem(utkastNokkel()));
+}
+
+function slettUtkast() {
+    localStorage.removeItem(utkastNokkel());
+}
+
+finn("knapp-tom-utkast").onclick = () => {
+    slettUtkast();
+    opneSkriv(null);
+};
+
+// "Treng du inspirasjon?": vel eit tilfeldig skriveforslag som tittel
+finn("knapp-inspirasjon").onclick = () => {
+    const nr = Math.floor(Math.random() * SKRIVEFORSLAG.length);
+    finn("nytt-tittel").value = SKRIVEFORSLAG[nr];
+    lagreUtkast();
+    finn("nytt-tekst").focus();
+};
 
 finn("nytt-privat").onchange = () => {
     finn("privat-info").hidden = !finn("nytt-privat").checked;
@@ -931,12 +1031,12 @@ finn("knapp-publiser").onclick = async () => {
         // Ny tekst
         await addDoc(collection(db, "innlegg"), {
             uid: minUid,
-            forfattarUid: minUid,
             ...data,
             delt: false,
             hjarte: [],
             dato: Date.now()
         });
+        slettUtkast();   // teksten er publisert, så utkastet trengst ikkje lenger
     }
     visProfil(minUid);
 };
@@ -1001,3 +1101,33 @@ finn("knapp-lagre-pynt").onclick = async () => {
     minProfil.bio = bio;
     visProfil(minUid);
 };
+
+
+// ---------- 18. KVELDSMODUS (mørkt tema) ----------
+
+// Slår kveldsmodus av eller på, og hugsar valet i nettlesaren (localStorage)
+function settKveldsmodus(pa) {
+    document.body.classList.toggle("kveld", pa);
+    finn("knapp-kveld").textContent = pa ? "☀️" : "🌙";
+    localStorage.setItem("digibook-kveld", pa ? "ja" : "nei");
+}
+
+finn("knapp-kveld").onclick = () => settKveldsmodus(!document.body.classList.contains("kveld"));
+
+// Når sida lastar: bruk det du valde sist
+settKveldsmodus(localStorage.getItem("digibook-kveld") === "ja");
+
+
+// ---------- 19. OM DIGIBOOK ----------
+
+// Trykk på "DigiBook" (eller "Om DigiBook") = vis sida om prosjektet
+let sideForOm = "side-logginn";   // sida me kom frå
+
+document.querySelectorAll(".til-om").forEach((knapp) => {
+    knapp.onclick = () => {
+        sideForOm = document.querySelector(".side:not([hidden])").id;
+        visSide("side-om");
+    };
+});
+
+finn("knapp-om-tilbake").onclick = () => visSide(sideForOm);

@@ -12,7 +12,7 @@
 
     <!-- MENY ØVST (berre synleg når du er logga inn) -->
     <header id="meny" hidden>
-        <span class="logo">DigiBook</span>
+        <button class="logo til-om" title="Om DigiBook">DigiBook</button>
         <nav>
             <button id="meny-feed" class="meny-knapp" data-side="side-feed">Til deg</button>
             <button id="meny-alle" class="meny-knapp" data-side="side-alle">Alle tekstar</button>
@@ -20,6 +20,7 @@
             <button id="meny-profil" class="meny-knapp" data-side="side-profil">Profil</button>
         </nav>
         <div class="meny-hogre">
+            <button id="knapp-kveld" class="lenke kveld-knapp" title="Kveldsmodus">🌙</button>
             <button id="meny-skriv">Skriv ny tekst</button>
             <button id="knapp-loggut" class="lenke">Logg ut</button>
         </div>
@@ -37,15 +38,18 @@
             </div>
             <div class="kort smal">
                 <h2>Logg inn</h2>
-                <label>E-post
-                    <input type="email" id="logginn-epost" autocomplete="email">
-                </label>
-                <label>Passord
-                    <input type="password" id="logginn-passord" autocomplete="current-password">
-                </label>
-                <button id="knapp-logginn" class="heil">Logg inn</button>
+                <form id="logginn-skjema">
+                    <label>E-post
+                        <input type="email" id="logginn-epost" autocomplete="email">
+                    </label>
+                    <label>Passord
+                        <input type="password" id="logginn-passord" autocomplete="current-password">
+                    </label>
+                    <button class="heil">Logg inn</button>
+                </form>
                 <p class="byt">Har du ikkje konto? <button id="til-registrer" class="lenke sterk">Lag ny konto</button></p>
             </div>
+            <p class="byt"><button class="lenke til-om">Om DigiBook</button></p>
         </section>
 
         <!-- ===== SIDE: LAG NY KONTO ===== -->
@@ -56,17 +60,55 @@
             </div>
             <div class="kort smal">
                 <h2>Lag ny konto</h2>
-                <label>Brukarnamn
-                    <input type="text" id="reg-brukarnamn" maxlength="20" autocomplete="username">
-                </label>
-                <label>E-post
-                    <input type="email" id="reg-epost" autocomplete="email">
-                </label>
-                <label>Passord <span class="grå">(minst 6 teikn)</span>
-                    <input type="password" id="reg-passord" autocomplete="new-password">
-                </label>
-                <button id="knapp-lagkonto" class="heil">Lag konto</button>
+                <form id="registrer-skjema">
+                    <label>Brukarnamn
+                        <input type="text" id="reg-brukarnamn" maxlength="20" autocomplete="username">
+                    </label>
+                    <label>E-post
+                        <input type="email" id="reg-epost" autocomplete="email">
+                    </label>
+                    <label>Passord <span class="grå">(minst 6 teikn)</span>
+                        <input type="password" id="reg-passord" autocomplete="new-password">
+                    </label>
+                    <button class="heil">Lag konto</button>
+                </form>
                 <p class="byt">Har du allereie konto? <button id="til-logginn" class="lenke sterk">Logg inn</button></p>
+            </div>
+        </section>
+
+        <!-- ===== SIDE: OM DIGIBOOK ===== -->
+        <section id="side-om" class="side" hidden>
+            <div class="kort middels om">
+                <button id="knapp-om-tilbake" class="lenke">← Tilbake</button>
+                <h2>Om DigiBook</h2>
+                <p>DigiBook er ein digital dagbok du kan dele med andre. Du kan skrive om tankane dine,
+                    finne andre som skriv om det same som deg, og svare, gje hjarte og følgje folk.</p>
+
+                <h3>Ei skuleoppgåve</h3>
+                <p>DigiBook er laga som <b>Utviklingsprosjekt 1</b> i <b>Utviklarfaget, 2IKTA</b>, hausten 2026.
+                    Det er eit skuleprosjekt og ikkje ei ekte teneste, så ikkje del sensitive opplysningar her.</p>
+
+                <h3>Bruk av KI</h3>
+                <p>Eg har brukt <b>Claude</b>, ein KI-assistent frå Anthropic, i dette prosjektet. Claude har hjelpt meg med:</p>
+                <ul>
+                    <li>å skrive og forenkle koden (HTML, CSS og JavaScript)</li>
+                    <li>å kople nettsida til Firebase og skrive sikkerheitsreglane</li>
+                    <li>å finne og rette feil</li>
+                    <li>design og fargar</li>
+                </ul>
+                <p>Eg har sjølv bestemt idéen, kva funksjonar nettsida skal ha og korleis ho skal sjå ut.
+                    Eg har sett opp Firebase og GitHub, og testa nettsida saman med vennar.</p>
+
+                <h3>Laga med</h3>
+                <p>HTML, CSS og JavaScript · Firebase Authentication (innlogging) · Cloud Firestore (database) · GitHub (versjonskontroll)</p>
+
+                <h3>Personvern</h3>
+                <ul>
+                    <li>E-posten din ligg i ei privat mappe som berre du kan sjå.</li>
+                    <li>Private tekstar kan berre du sjå.</li>
+                    <li>Utkast og kveldsmodus vert berre lagra i nettlesaren din.</li>
+                    <li>Du kan slette tekstane og svara dine når du vil.</li>
+                </ul>
             </div>
         </section>
 
@@ -87,7 +129,7 @@
         <!-- ===== SIDE: TIL DEG ===== -->
         <section id="side-feed" class="side" hidden>
             <div class="side-topp">
-                <h2>Til deg</h2>
+                <h2 id="feed-tittel">Til deg</h2>
                 <p id="feed-tekst" class="grå"></p>
             </div>
             <div id="feed-liste" class="rutenett"></div>
@@ -106,10 +148,10 @@
         <section id="side-sok" class="side" hidden>
             <div class="side-topp">
                 <h2>Søk</h2>
-                <div class="rad">
+                <form id="sok-skjema" class="rad">
                     <input type="text" id="sok-felt" placeholder="Søk etter personar, emne eller ord">
-                    <button id="knapp-sok">Søk</button>
-                </div>
+                    <button>Søk</button>
+                </form>
             </div>
             <div id="sok-emne-boks">
                 <h3 class="undertittel">Populære emne</h3>
@@ -158,7 +200,13 @@
                 <!-- Det kvite arket -->
                 <div class="skrivebord">
                     <div class="dokument">
-                        <p id="skriv-dato"></p>
+                        <div class="dokument-topp">
+                            <p id="skriv-dato"></p>
+                            <button id="knapp-inspirasjon" class="lenke">✨ Treng du inspirasjon?</button>
+                        </div>
+                        <p id="utkast-info" class="utkast-info" hidden>
+                            Utkastet ditt er henta fram. <button id="knapp-tom-utkast" class="lenke sterk">Start på nytt</button>
+                        </p>
                         <input type="text" id="nytt-tittel" class="tittel-felt" placeholder="Tittel" maxlength="80">
                         <div id="nytt-tekst" class="skrivefelt" contenteditable="true" data-placeholder="Kjære dagbok ..."></div>
                     </div>
@@ -194,7 +242,12 @@
                 <div class="banner"></div>
                 <div id="profil-bilete" class="avatar"></div>
                 <h2 id="profil-namn"></h2>
-                <p id="profil-tal" class="grå liten-tekst"></p>
+                <!-- Trykk på tala for å sjå kven det er -->
+                <p class="profil-tal">
+                    <button id="knapp-folgjarar" class="lenke"></button>
+                    ·
+                    <button id="knapp-folgjer" class="lenke"></button>
+                </p>
                 <p id="profil-bio"></p>
                 <p id="profil-interesser" class="grå"></p>
                 <div id="profil-knappar" class="profil-knappar">
@@ -248,6 +301,15 @@
         <div class="dialog-knappar">
             <button id="rapport-avbryt" class="kvit">Avbryt</button>
             <button id="rapport-send">Send rapport</button>
+        </div>
+    </dialog>
+
+    <!-- ===== VINDAUGE: FØLGJARAR / FØLGJER ===== -->
+    <dialog id="folg-dialog">
+        <h2 id="folg-tittel"></h2>
+        <div id="folg-liste" class="folg-liste"></div>
+        <div class="dialog-knappar">
+            <button id="folg-lukk" class="kvit">Lukk</button>
         </div>
     </dialog>
 

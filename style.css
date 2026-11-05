@@ -8,6 +8,9 @@
     --tekst: #2f2924;
     --grå: #8c7f73;
     --raud: #b04a3c;
+    --papir: #faf8f5;        /* private tekstar og statuslinja */
+    --skrivebord: #efe9e1;   /* bakgrunnen rundt Word-arket */
+    --feil-bakgrunn: #f8e3df;
 }
 
 /* ===== GRUNNLEGGJANDE ===== */
@@ -36,7 +39,7 @@ h2 { font-size: 1.7rem; margin: 0 0 0.3rem; }
     margin: 0 auto 1.5rem;
     padding: 0.75rem 1rem;
     border-radius: 8px;
-    background: #f8e3df;
+    background: var(--feil-bakgrunn);
     color: var(--raud);
 }
 
@@ -80,6 +83,14 @@ button.lenke:hover { color: var(--tekst); }
 .kort { background: var(--kvit); border: 1px solid var(--kant); border-radius: 12px; padding: 1.75rem; }
 .smal { max-width: 460px; margin: 2rem auto; }
 .middels { max-width: 720px; margin: 1rem auto; }
+/* Logoen øvst er ein knapp som opnar "Om DigiBook" */
+button.logo { background: none; border: none; padding: 0; color: var(--tekst); font: 700 1.5rem "Lora", serif; }
+
+/* Om DigiBook */
+.om h3 { font-size: 1.15rem; margin: 1.5rem 0 0.4rem; }
+.om ul { margin: 0.3rem 0; padding-left: 1.2rem; }
+.om li { margin-bottom: 0.25rem; }
+
 /* Logg inn / Lag konto */
 .velkomen { text-align: center; margin-top: 3rem; }
 .velkomen p { margin: 0.25rem 0 0; }
@@ -140,7 +151,7 @@ input:focus, textarea:focus { outline: none; border-color: var(--brun); box-shad
     padding: 1.25rem;
 }
 .innlegg:hover { box-shadow: 0 6px 20px rgba(60, 40, 20, 0.07); }
-.innlegg.privat { background: #faf8f5; border-style: dashed; }
+.innlegg.privat { background: var(--papir); border-style: dashed; }
 
 
 .innlegg-topp { display: flex; align-items: center; justify-content: space-between; }
@@ -172,6 +183,15 @@ input:focus, textarea:focus { outline: none; border-color: var(--brun); box-shad
     overflow: hidden;
     overflow-wrap: anywhere;
 }
+/* "Les meir →" synest berre når teksten er kutta */
+.innlegg .tekst.kutta {
+    -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent);
+    mask-image: linear-gradient(to bottom, black 60%, transparent);
+}
+.les-meir { display: none; color: var(--brun); font-size: 0.85rem; font-weight: 600; margin: -0.4rem 0 0.6rem; }
+.tekst.kutta + .les-meir { display: block; }
+.innlegg.stor .les-meir { display: none; }
+.innlegg.stor .tekst { -webkit-mask-image: none; mask-image: none; }
 .innlegg .tekst ul, .innlegg .tekst ol { margin: 0.3rem 0; padding-left: 1.3rem; }
 
 /* Når teksten er opna: stor og heile teksten synest */
@@ -278,8 +298,14 @@ button.slett { color: var(--raud); }
 /* ===== PROFIL ===== */
 .profil-kort { max-width: 680px; margin: 0 auto 2.5rem; padding: 0 0 1.75rem; overflow: hidden; text-align: center; }
 .banner { height: 120px; background: var(--farge); }
-.profil-kort .avatar { margin: -48px auto 0.75rem; border: 4px solid var(--kvit); }
+.profil-kort .avatar { position: relative; margin: -48px auto 0.75rem; border: 4px solid var(--kvit); }   /* relative = ligg oppå banneret */
 .profil-kort p { margin: 0.25rem 1.5rem; }
+/* Følgjarar · følgjer (kan trykkjast på) */
+.profil-tal { color: var(--grå); font-size: 0.85rem; }
+.profil-tal .lenke { font-size: 0.85rem; }
+.profil-tal .lenke:hover { text-decoration: underline; }
+.folg-liste { display: flex; flex-direction: column; gap: 0.5rem; max-height: 60vh; overflow-y: auto; margin-top: 1rem; }
+
 .profil-knappar { display: flex; justify-content: center; gap: 0.5rem; margin-top: 1.25rem; }
 .profil-knappar:empty { display: none; }
 
@@ -317,7 +343,7 @@ button.slett { color: var(--raud); }
 .farge-lavendel { --farge: #d4cbe0; }
 .farge-himmel   { --farge: #c6d6e2; }
 
-.fargeknapp { background: var(--farge); border-color: transparent; color: var(--tekst); text-transform: capitalize; margin: 0 0.35rem 0.35rem 0; }
+.fargeknapp { background: var(--farge); border-color: transparent; color: #2f2924; text-transform: capitalize; margin: 0 0.35rem 0.35rem 0; }
 .fargeknapp.vald { border-color: var(--tekst); }
 
 /* ===== SKRIV-SIDA (ser ut som Word) ===== */
@@ -340,14 +366,13 @@ button.slett { color: var(--raud); }
 }
 .format { background: none; border-color: transparent; color: var(--tekst); min-width: 36px; padding: 0.3rem 0.55rem; }
 .format:hover { background: var(--lysebrun); }
-.format.aktiv { background: var(--lysebrun); border-color: var(--kant); }
 .skilje { width: 1px; height: 24px; margin: 0 0.5rem; background: var(--kant); }
 .emoji { background: none; border-color: transparent; padding: 0.15rem 0.35rem; font-size: 1.15rem; }
 .emoji.vald { background: var(--lysebrun); border-color: var(--brun); }
 .avkryss { display: flex; align-items: center; gap: 0.4rem; margin: 0 0 0 auto; }
 
 /* Det kvite arket på eit lysegrått "skrivebord" */
-.skrivebord { background: #efe9e1; padding: 2.5rem 1.25rem; }
+.skrivebord { background: var(--skrivebord); padding: 2.5rem 1.25rem; }
 .dokument {
     max-width: 680px;
     min-height: 520px;
@@ -357,7 +382,11 @@ button.slett { color: var(--raud); }
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
     font-family: "Lora", serif;
 }
-#skriv-dato { margin: 0 0 1rem; color: var(--grå); font-family: "Inter", sans-serif; font-size: 0.85rem; text-transform: capitalize; }
+.dokument-topp { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: 1rem; }
+#knapp-inspirasjon { font-family: "Inter", sans-serif; font-size: 0.85rem; }
+.utkast-info { margin: 0 0 1rem; padding: 0.5rem 0.8rem; background: var(--lysebrun); border-radius: 8px; font-family: "Inter", sans-serif; font-size: 0.85rem; color: var(--grå); }
+.utkast-info .lenke { font-size: 0.85rem; }
+#skriv-dato { margin: 0; color: var(--grå); font-family: "Inter", sans-serif; font-size: 0.85rem; text-transform: capitalize; }
 .dokument .tittel-felt {
     border: none;
     padding: 0;
@@ -378,7 +407,7 @@ button.slett { color: var(--raud); }
     justify-content: space-between;
     align-items: center;
     padding: 0.75rem 1.5rem;
-    background: #faf7f3;
+    background: var(--papir);
     border-top: 1px solid var(--kant);
 }
 
@@ -390,10 +419,30 @@ dialog {
     border: 1px solid var(--kant);
     border-radius: 12px;
     color: var(--tekst);
+    background: var(--kvit);
 }
 dialog::backdrop { background: rgba(47, 41, 36, 0.4); }
 .radio { display: flex; align-items: center; gap: 0.5rem; font-weight: 400; margin-bottom: 0.6rem; }
 .dialog-knappar { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem; }
+
+/* ===== KVELDSMODUS ===== */
+/* Same variablar, berre mørkare fargar. Alt anna i CSS-en brukar variablane. */
+body.kveld {
+    --bakgrunn: #1e1a17;
+    --kvit: #2a2420;
+    --kant: #3e352e;
+    --brun: #c8a17c;
+    --lysebrun: #3a3029;
+    --tekst: #efe6dc;
+    --grå: #a8998a;
+    --raud: #e4806f;
+    --papir: #25201c;
+    --skrivebord: #1a1613;
+    --feil-bakgrunn: #3b2522;
+    color-scheme: dark;
+}
+body.kveld .banner { filter: brightness(0.75); }
+.kveld-knapp { font-size: 1.1rem; }
 
 /* ===== MOBIL ===== */
 @media (max-width: 720px) {
