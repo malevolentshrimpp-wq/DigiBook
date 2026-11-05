@@ -99,6 +99,11 @@ button.logo { background: none; border: none; padding: 0; color: var(--tekst); f
 .smal h2 { font-size: 1.4rem; margin-bottom: 1.25rem; }
 .byt { text-align: center; margin: 1.25rem 0 0; color: var(--grå); font-size: 0.9rem; }
 button.lenke.sterk { color: var(--brun); font-weight: 600; }
+.glomt { text-align: right; margin: 0.6rem 0 0; }
+.glomt .lenke { font-size: 0.85rem; }
+
+/* Gode meldingar (t.d. "e-post er sendt") er ikkje raude */
+#melding.ok { background: var(--lysebrun); color: var(--tekst); }
 
 label { display: block; font-weight: 500; font-size: 0.9rem; margin-bottom: 1rem; }
 .etikett { font-weight: 600; margin: 1.25rem 0 0.5rem; }

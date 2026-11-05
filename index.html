@@ -47,6 +47,7 @@
                     </label>
                     <button class="heil">Logg inn</button>
                 </form>
+                <p class="glomt"><button id="knapp-glomt" class="lenke">Gløymt passord?</button></p>
                 <p class="byt">Har du ikkje konto? <button id="til-registrer" class="lenke sterk">Lag ny konto</button></p>
             </div>
             <p class="byt"><button class="lenke til-om">Om DigiBook</button></p>
@@ -73,6 +74,22 @@
                     <button class="heil">Lag konto</button>
                 </form>
                 <p class="byt">Har du allereie konto? <button id="til-logginn" class="lenke sterk">Logg inn</button></p>
+            </div>
+        </section>
+
+        <!-- ===== SIDE: STADFEST E-POSTEN ===== -->
+        <section id="side-verifiser" class="side" hidden>
+            <div class="velkomen">
+                <h1 class="logo stor">DigiBook</h1>
+            </div>
+            <div class="kort smal">
+                <h2>Stadfest e-posten din</h2>
+                <p>Me har sendt ei lenke til <b id="verifiser-epost"></b>.
+                    Trykk på lenka i e-posten, og kom så tilbake hit.</p>
+                <p class="grå liten-tekst">Finn du ikkje e-posten? Sjekk søppelposten.</p>
+                <button id="knapp-har-stadfesta" class="heil">Eg har stadfesta e-posten</button>
+                <button id="knapp-send-pa-nytt" class="kvit heil">Send e-posten på nytt</button>
+                <p class="byt"><button id="knapp-verifiser-loggut" class="lenke sterk">Logg ut</button></p>
             </div>
         </section>
 
@@ -104,6 +121,7 @@
 
                 <h3>Personvern</h3>
                 <ul>
+                    <li>Du må stadfeste e-posten din før du kan bruke DigiBook, så ingen kan lage falske brukarar.</li>
                     <li>E-posten din ligg i ei privat mappe som berre du kan sjå.</li>
                     <li>Private tekstar kan berre du sjå.</li>
                     <li>Utkast og kveldsmodus vert berre lagra i nettlesaren din.</li>

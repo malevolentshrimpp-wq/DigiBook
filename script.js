@@ -7,7 +7,8 @@
 // ---------- 1. KOPLE TIL FIREBASE ----------
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/13.1.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged }
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged,
+    sendEmailVerification, sendPasswordResetEmail }
     from "https://www.gstatic.com/firebasejs/13.1.0/firebase-auth.js";
 import { getFirestore, collection, doc, getDoc, getDocs, setDoc, updateDoc, addDoc, deleteDoc,
     query, where, arrayUnion, arrayRemove, deleteField }
@@ -24,6 +25,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);     // innlogging
+auth.languageCode = "no";      // e-postane frå Firebase (stadfesting, nytt passord) kjem på norsk
 const db = getFirestore(app);  // databasen
 
 
@@ -76,9 +78,10 @@ function visSide(id) {
     window.scrollTo(0, 0);
 }
 
-// Viser ei feilmelding øvst på sida
-function visMelding(tekst) {
+// Viser ei melding øvst på sida. ok = true gir ei god melding (ikkje raud).
+function visMelding(tekst, ok = false) {
     finn("melding").textContent = tekst;
+    finn("melding").classList.toggle("ok", ok);
     finn("melding").hidden = false;
     window.scrollTo(0, 0);
 }
@@ -248,14 +251,18 @@ finn("registrer-skjema").onsubmit = async (hending) => {
 finn("knapp-loggut").onclick = () => signOut(auth);
 
 // Denne køyrer kvar gong nokon loggar inn eller ut
-onAuthStateChanged(auth, async (brukar) => {
-    if (!brukar) {
+onAuthStateChanged(auth, (brukar) => {
+    if (brukar) {
+        startApp(brukar);
+    } else {
         minUid = null;
         finn("meny").hidden = true;
         visSide("side-logginn");
-        return;
     }
+});
 
+// Startar appen for ein brukar som har logga inn
+async function startApp(brukar) {
     minUid = brukar.uid;
     mineDelte = {};
     const profilRef = doc(db, "brukarar", minUid);
@@ -274,11 +281,25 @@ onAuthStateChanged(auth, async (brukar) => {
             folgjer: []
         };
         await setDoc(profilRef, minProfil);
+        await sendEmailVerification(brukar);   // ny brukar: send e-post med stadfestingslenke
     }
 
     // PERSONVERN: e-posten ligg i ei PRIVAT mappe under brukaren (brukarar/ID/privat/info).
     // Berre du sjølv og admin kan sjå han, ikkje andre brukarar.
     await setDoc(doc(db, "brukarar", minUid, "privat", "info"), { epost: brukar.email });
+
+    // SIKKERHEIT: du må stadfeste e-posten før du kan bruke DigiBook.
+    // Då kan ingen lage tusen falske brukarar med e-postar som ikkje finst.
+    if (!brukar.emailVerified) {
+        await brukar.reload();                          // spør Firebase: er e-posten stadfesta no?
+        if (brukar.emailVerified) await brukar.getIdToken(true);   // ny "billett" som seier ja
+    }
+    if (!brukar.emailVerified) {
+        finn("meny").hidden = true;
+        finn("verifiser-epost").textContent = brukar.email;
+        visSide("side-verifiser");
+        return;
+    }
 
     finn("meny").hidden = false;
     if (minProfil.interesser.length === 0) {
@@ -286,7 +307,49 @@ onAuthStateChanged(auth, async (brukar) => {
     } else {
         visFeed();
     }
-});
+}
+
+// "Eg har stadfesta e-posten": prøv å starte appen på nytt
+finn("knapp-har-stadfesta").onclick = async () => {
+    await startApp(auth.currentUser);
+    if (!auth.currentUser.emailVerified) {
+        visMelding("E-posten er ikkje stadfesta enno. Trykk på lenka i e-posten først.");
+    }
+};
+
+finn("knapp-send-pa-nytt").onclick = async () => {
+    try {
+        await sendEmailVerification(auth.currentUser);
+        visMelding("Ny e-post er sendt! Sjekk innboksen og søppelposten.", true);
+    } catch {
+        visMelding("Vent litt før du prøver igjen.");
+    }
+};
+
+finn("knapp-verifiser-loggut").onclick = () => signOut(auth);
+
+// Medan stadfestingssida er open: sjekk kvart 5. sekund om e-posten er stadfesta.
+// Då kjem du inn av deg sjølv når du har trykt på lenka i e-posten.
+setInterval(async () => {
+    if (finn("side-verifiser").hidden || !auth.currentUser) return;
+    await auth.currentUser.reload();
+    if (auth.currentUser.emailVerified) startApp(auth.currentUser);
+}, 5000);
+
+// GLØYMT PASSORD: Firebase sender ei lenke der du kan lage nytt passord
+finn("knapp-glomt").onclick = async () => {
+    const epost = finn("logginn-epost").value.trim();
+    if (epost === "") {
+        visMelding("Skriv e-posten din i feltet over, og trykk «Gløymt passord?» igjen.");
+        return;
+    }
+    try {
+        await sendPasswordResetEmail(auth, epost);
+        visMelding("Viss det finst ein konto med denne e-posten, har me sendt ei lenke for å lage nytt passord.", true);
+    } catch {
+        visMelding("Sjekk at e-posten er rett skriven.");
+    }
+};
 
 
 // ---------- 5. MENYEN ----------
