@@ -215,7 +215,11 @@ finn("logginn-skjema").onsubmit = async (hending) => {
     try {
         await signInWithEmailAndPassword(auth, finn("logginn-epost").value, finn("logginn-passord").value);
     } catch (feil) {
-        visMelding("Feil e-post eller passord.");
+        // Vis ei melding som fortel KVA som gjekk gale
+        if (feil.code === "auth/invalid-credential") visMelding("Feil e-post eller passord.");
+        else if (feil.code === "auth/too-many-requests") visMelding("For mange forsøk. Vent litt, eller trykk «Gløymt passord?».");
+        else if (feil.code === "auth/network-request-failed") visMelding("Fekk ikkje kontakt med internett. Sjekk nettet og prøv igjen.");
+        else visMelding("Klarte ikkje å logge inn (" + feil.code + ").");
     }
 };
 
@@ -281,7 +285,10 @@ async function startApp(brukar) {
             folgjer: []
         };
         await setDoc(profilRef, minProfil);
-        await sendEmailVerification(brukar);   // ny brukar: send e-post med stadfestingslenke
+        // Ny brukar: send e-post med stadfestingslenke. Går det ikkje, kan han sendast på nytt seinare.
+        try {
+            await sendEmailVerification(brukar);
+        } catch {}
     }
 
     // PERSONVERN: e-posten ligg i ei PRIVAT mappe under brukaren (brukarar/ID/privat/info).
@@ -864,6 +871,10 @@ async function visProfil(uid) {
         .map((deling) => offentlege.find((i) => i.id === deling.originalId))
         .filter((original) => original);   // hopp over viss originalen er sletta
     const profil = profilar[uid];
+    if (!profil) {
+        visMelding("Fann ikkje denne brukaren. Kanskje kontoen er sletta?");
+        return;
+    }
 
     finn("profil-kort").className = "kort profil-kort farge-" + profil.farge;
     finn("profil-bilete").innerHTML = bileteHTML(profil);
@@ -872,9 +883,10 @@ async function visProfil(uid) {
     finn("profil-interesser").textContent = profil.interesser.map((e) => "#" + e).join("   ");
 
     // Følgjarar: alle profilar som har denne personen i "folgjer"-lista si
-    const folgjarar = Object.keys(profilar).filter((id) => (profilar[id].folgjer || []).includes(uid));
+    // (id !== uid: ingen kan telje som følgjar av seg sjølv)
+    const folgjarar = Object.keys(profilar).filter((id) => id !== uid && (profilar[id].folgjer || []).includes(uid));
     // Følgjer: personane i "folgjer"-lista til denne personen (som framleis finst)
-    const folgjer = (profil.folgjer || []).filter((id) => profilar[id]);
+    const folgjer = (profil.folgjer || []).filter((id) => id !== uid && profilar[id]);
 
     const ordet = folgjarar.length === 1 ? "følger" : "følgere";
     finn("knapp-folgjarar").textContent = `${folgjarar.length} ${ordet}`;
@@ -928,6 +940,7 @@ finn("folg-lukk").onclick = () => finn("folg-dialog").close();
 
 // Følg eller slutt å følgje
 finn("knapp-folg").onclick = async () => {
+    if (visarProfil === minUid) return;   // du kan ikkje følgje deg sjølv
     const ref = doc(db, "brukarar", minUid);
     if ((minProfil.folgjer || []).includes(visarProfil)) {
         await updateDoc(ref, { folgjer: arrayRemove(visarProfil) });
