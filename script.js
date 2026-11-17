@@ -267,6 +267,11 @@ onAuthStateChanged(auth, (brukar) => {
 
 // Startar appen for ein brukar som har logga inn
 async function startApp(brukar) {
+    // Hent nyaste info frå Firebase (er e-posten stadfesta?) og ein ny "billett" (token).
+    // Billetten er det sikkerheitsreglane sjekkar, så han må vere oppdatert.
+    await brukar.reload();
+    await brukar.getIdToken(true);
+
     minUid = brukar.uid;
     mineDelte = {};
     const profilRef = doc(db, "brukarar", minUid);
@@ -297,10 +302,6 @@ async function startApp(brukar) {
 
     // SIKKERHEIT: du må stadfeste e-posten før du kan bruke DigiBook.
     // Då kan ingen lage tusen falske brukarar med e-postar som ikkje finst.
-    if (!brukar.emailVerified) {
-        await brukar.reload();                          // spør Firebase: er e-posten stadfesta no?
-        if (brukar.emailVerified) await brukar.getIdToken(true);   // ny "billett" som seier ja
-    }
     if (!brukar.emailVerified) {
         finn("meny").hidden = true;
         finn("verifiser-epost").textContent = brukar.email;
