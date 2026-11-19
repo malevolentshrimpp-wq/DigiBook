@@ -261,16 +261,14 @@ onAuthStateChanged(auth, (brukar) => {
     } else {
         minUid = null;
         finn("meny").hidden = true;
+        finn("stadfest-banner").hidden = true;
         visSide("side-logginn");
     }
 });
 
 // Startar appen for ein brukar som har logga inn
 async function startApp(brukar) {
-    // Hent nyaste info frå Firebase (er e-posten stadfesta?) og ein ny "billett" (token).
-    // Billetten er det sikkerheitsreglane sjekkar, så han må vere oppdatert.
-    await brukar.reload();
-    await brukar.getIdToken(true);
+    await brukar.reload();   // hent nyaste info frå Firebase (t.d. om e-posten er stadfesta)
 
     minUid = brukar.uid;
     mineDelte = {};
@@ -300,14 +298,8 @@ async function startApp(brukar) {
     // Berre du sjølv og admin kan sjå han, ikkje andre brukarar.
     await setDoc(doc(db, "brukarar", minUid, "privat", "info"), { epost: brukar.email });
 
-    // SIKKERHEIT: du må stadfeste e-posten før du kan bruke DigiBook.
-    // Då kan ingen lage tusen falske brukarar med e-postar som ikkje finst.
-    if (!brukar.emailVerified) {
-        finn("meny").hidden = true;
-        finn("verifiser-epost").textContent = brukar.email;
-        visSide("side-verifiser");
-        return;
-    }
+    // Har du ikkje stadfesta e-posten, får du ein liten beskjed øvst (men du kjem inn likevel)
+    finn("stadfest-banner").hidden = brukar.emailVerified;
 
     finn("meny").hidden = false;
     if (minProfil.interesser.length === 0) {
@@ -316,14 +308,6 @@ async function startApp(brukar) {
         visFeed();
     }
 }
-
-// "Eg har stadfesta e-posten": prøv å starte appen på nytt
-finn("knapp-har-stadfesta").onclick = async () => {
-    await startApp(auth.currentUser);
-    if (!auth.currentUser.emailVerified) {
-        visMelding("E-posten er ikkje stadfesta enno. Trykk på lenka i e-posten først.");
-    }
-};
 
 finn("knapp-send-pa-nytt").onclick = async () => {
     try {
@@ -334,15 +318,6 @@ finn("knapp-send-pa-nytt").onclick = async () => {
     }
 };
 
-finn("knapp-verifiser-loggut").onclick = () => signOut(auth);
-
-// Medan stadfestingssida er open: sjekk kvart 5. sekund om e-posten er stadfesta.
-// Då kjem du inn av deg sjølv når du har trykt på lenka i e-posten.
-setInterval(async () => {
-    if (finn("side-verifiser").hidden || !auth.currentUser) return;
-    await auth.currentUser.reload();
-    if (auth.currentUser.emailVerified) startApp(auth.currentUser);
-}, 5000);
 
 // GLØYMT PASSORD: Firebase sender ei lenke der du kan lage nytt passord
 finn("knapp-glomt").onclick = async () => {

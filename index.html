@@ -27,6 +27,12 @@
     </header>
 
     <main>
+        <!-- Beskjed til dei som ikkje har stadfesta e-posten -->
+        <p id="stadfest-banner" class="stadfest-banner" hidden>
+            Du har ikkje stadfesta e-posten din enno. Sjekk innboksen og søppelposten.
+            <button id="knapp-send-pa-nytt" class="lenke sterk">Send e-posten på nytt</button>
+        </p>
+
         <!-- Her kjem feilmeldingar -->
         <p id="melding" hidden></p>
 
@@ -77,22 +83,6 @@
             </div>
         </section>
 
-        <!-- ===== SIDE: STADFEST E-POSTEN ===== -->
-        <section id="side-verifiser" class="side" hidden>
-            <div class="velkomen">
-                <h1 class="logo stor">DigiBook</h1>
-            </div>
-            <div class="kort smal">
-                <h2>Stadfest e-posten din</h2>
-                <p>Me har sendt ei lenke til <b id="verifiser-epost"></b>.
-                    Trykk på lenka i e-posten, og kom så tilbake hit.</p>
-                <p class="grå liten-tekst">Finn du ikkje e-posten? Sjekk søppelposten.</p>
-                <button id="knapp-har-stadfesta" class="heil">Eg har stadfesta e-posten</button>
-                <button id="knapp-send-pa-nytt" class="kvit heil">Send e-posten på nytt</button>
-                <p class="byt"><button id="knapp-verifiser-loggut" class="lenke sterk">Logg ut</button></p>
-            </div>
-        </section>
-
         <!-- ===== SIDE: OM DIGIBOOK ===== -->
         <section id="side-om" class="side" hidden>
             <div class="kort middels om">
@@ -121,7 +111,7 @@
 
                 <h3>Personvern</h3>
                 <ul>
-                    <li>Du må stadfeste e-posten din før du kan bruke DigiBook, så ingen kan lage falske brukarar.</li>
+                    <li>Du får ein e-post for å stadfeste at e-postadressa er di.</li>
                     <li>E-posten din ligg i ei privat mappe som berre du kan sjå.</li>
                     <li>Private tekstar kan berre du sjå.</li>
                     <li>Utkast og kveldsmodus vert berre lagra i nettlesaren din.</li>

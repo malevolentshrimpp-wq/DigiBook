@@ -102,6 +102,9 @@ button.lenke.sterk { color: var(--brun); font-weight: 600; }
 .glomt { text-align: right; margin: 0.6rem 0 0; }
 .glomt .lenke { font-size: 0.85rem; }
 
+.stadfest-banner { max-width: 720px; margin: 0 auto 1.5rem; padding: 0.75rem 1rem; border-radius: 8px; background: var(--lysebrun); font-size: 0.9rem; }
+.stadfest-banner .lenke { font-size: 0.9rem; margin-left: 0.3rem; }
+
 /* Gode meldingar (t.d. "e-post er sendt") er ikkje raude */
 #melding.ok { background: var(--lysebrun); color: var(--tekst); }
 
