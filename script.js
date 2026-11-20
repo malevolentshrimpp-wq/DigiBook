@@ -68,7 +68,7 @@ function finn(id) {
     return document.getElementById(id);
 }
 
-// Viser éi side og skjuler alle dei andre. Markerer òg rett knapp i menyen.
+// Viser ei side og skjuler alle dei andre. Markerer òg rett knapp i menyen.
 function visSide(id) {
     document.querySelectorAll(".side").forEach((side) => side.hidden = side.id !== id);
     document.querySelectorAll(".meny-knapp").forEach((knapp) => {
@@ -375,7 +375,7 @@ finn("knapp-legg-til-interesse").onclick = () => {
 
 finn("knapp-lagre-interesser").onclick = async () => {
     if (valde.length === 0) {
-        visMelding("Vel minst éin ting.");
+        visMelding("Vel minst ein ting.");
         return;
     }
     await updateDoc(doc(db, "brukarar", minUid), { interesser: valde });
@@ -428,7 +428,7 @@ function hentMine() {
 
 // ---------- 8. VISE TEKSTAR ----------
 
-// Lagar HTML for éin tekst
+// Lagar HTML for ein tekst
 function innleggHTML(innlegg) {
     const erMin = innlegg.uid === minUid;
     const hjarte = innlegg.hjarte || [];
@@ -495,7 +495,7 @@ function merkLangeTekstar(boks) {
     });
 }
 
-// Bestem kva alle knappane i éin tekst gjer
+// Bestem kva alle knappane i ein tekst gjer
 function koplKnappar(kort, innlegg) {
     kort.querySelector(".innhald").onclick = () => opneInnlegg(innlegg);
     vedKlikk(kort, ".svar-knapp", () => opneInnlegg(innlegg));
