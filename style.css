@@ -212,6 +212,9 @@ input:focus, textarea:focus { outline: none; border-color: var(--brun); box-shad
 .merke-rad { display: flex; gap: 0.6rem; align-items: center; margin-bottom: 0.4rem; }
 .merke-rad:empty { display: none; }
 .merke { background: var(--lysebrun); color: var(--brun); font-size: 0.75rem; font-weight: 600; padding: 0.1rem 0.55rem; border-radius: 999px; }
+.merke.ikkje-stadfest { background: transparent; color: var(--grå, #8a7f74); border: 1px solid currentColor; }
+#profil-stadfest { display: inline-block; margin-bottom: 0.5rem; }
+#profil-stadfest[hidden] { display: none; }
 
 .innlegg-botn {
     display: flex;

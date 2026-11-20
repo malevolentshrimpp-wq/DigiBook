@@ -285,7 +285,8 @@ async function startApp(brukar) {
             bilete: "",
             farge: "kaffi",
             interesser: [],
-            folgjer: []
+            folgjer: [],
+            stadfesta: false
         };
         await setDoc(profilRef, minProfil);
         // Ny brukar: send e-post med stadfestingslenke. Går det ikkje, kan han sendast på nytt seinare.
@@ -297,6 +298,14 @@ async function startApp(brukar) {
     // PERSONVERN: e-posten ligg i ei PRIVAT mappe under brukaren (brukarar/ID/privat/info).
     // Berre du sjølv og admin kan sjå han, ikkje andre brukarar.
     await setDoc(doc(db, "brukarar", minUid, "privat", "info"), { epost: brukar.email });
+
+    // Lagre i profilen om e-posten er stadfesta, så andre kan sjå det på profilen din
+    if (minProfil.stadfesta !== brukar.emailVerified) {
+        // Ny "billett" frå Firebase som viser at e-posten er stadfesta (reglane sjekkar den)
+        if (brukar.emailVerified) await brukar.getIdToken(true);
+        minProfil.stadfesta = brukar.emailVerified;
+        await updateDoc(profilRef, { stadfesta: brukar.emailVerified });
+    }
 
     // Har du ikkje stadfesta e-posten, får du ein liten beskjed øvst (men du kjem inn likevel)
     finn("stadfest-banner").hidden = brukar.emailVerified;
@@ -855,6 +864,12 @@ async function visProfil(uid) {
     finn("profil-kort").className = "kort profil-kort farge-" + profil.farge;
     finn("profil-bilete").innerHTML = bileteHTML(profil);
     finn("profil-namn").textContent = profil.brukarnamn;
+
+    // Vis om e-posten er stadfesta. Gamle profilar utan denne infoen får ingen merkelapp.
+    const merke = finn("profil-stadfest");
+    merke.hidden = profil.stadfesta === undefined;
+    merke.textContent = profil.stadfesta ? "✓ Stadfesta e-post" : "Ikkje stadfesta e-post";
+    merke.className = profil.stadfesta ? "merke" : "merke ikkje-stadfest";
     finn("profil-bio").textContent = profil.bio || (erMeg ? "Du har ikkje skrive noko om deg sjølv enno." : "");
     finn("profil-interesser").textContent = profil.interesser.map((e) => "#" + e).join("   ");
 
